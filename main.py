@@ -33,24 +33,33 @@ def ping(update: Update, context: CallbackContext):
 	dt=datetime.now(update.message.date.tzinfo)-update.message.date
 	update.message.reply_text(f'Ping is {dt.total_seconds():.2f}s')
 
+#taken from https://core.telegram.org/bots/api#markdownv2-style
+def escape_md(txt: str) -> str:#TODO: reformat
+	return txt.replace("\\",r"\\").replace("_",r"\_").replace("*",r"\*")\
+		.replace("[",r"\[").replace("]",r"\]").replace("`",r"\`").replace("~",r"\~")\
+		.replace("@",r"\@").replace("(",r"\(").replace(")",r"\)").replace(">",r"\>")\
+		.replace("<",r"\<").replace("#",r"\#").replace("+",r"\+").replace("-",r"\-")\
+		.replace("=",r"\=").replace("|",r"\|").replace("{",r"\{").replace("}",r"\}")\
+		.replace(".",r"\.").replace("!",r"\!")
+
 def get_mention(user):
 	if user.username == None:
-		return f"[{user.first_name}](tg://user?id={user.id})"
+		return f"[{escape_md(user.first_name)}](tg://user?id={user.id})"
 	else:
-		return "@"+user.username
+		return "@"+escape_md(user.username)
 
 @message(Filters.status_update.new_chat_members)
 def new_chat_member(update: Update, context: CallbackContext):
 	handles=", ".join(get_mention(user) for user in update.message.new_chat_members)
 	update.message.reply_text(
 f"""{handles},
-いらっしゃいませ! \\[Welcome!\\]
-Welcome to this chat! Please read the rules.
+いらっしゃいませ! \\[Welcome\\!\\]
+Welcome to this chat\\! Please read the rules.
 Добро пожаловать в чат! Прочти правила, пожалуйста.
 このチャットへようこそ！ ルールをお読みください。
 
-[rules](https://t.me/dev_meme/3667)""",
-parse_mode=ParseMode.MARKDOWN)
+[rules](https://t.me/dev\\_meme/3667)""",
+parse_mode=ParseMode.MARKDOWN_V2)
 
 print("starting polling")
 updater.start_polling()
