@@ -53,12 +53,12 @@ def new_chat_member(update: Update, context: CallbackContext):
 	handles=", ".join(get_mention(user) for user in update.message.new_chat_members)
 	update.message.reply_text(
 f"""{handles},
-いらっしゃいませ! \\[Welcome\\!\\]
-Welcome to this chat\\! Please read the rules.
-Добро пожаловать в чат! Прочти правила, пожалуйста.
+いらっしゃいませ\\! \\[Welcome\\!\\]
+Welcome to this chat\\! Please read the rules\\.
+Добро пожаловать в чат\\! Прочти правила, пожалуйста\\.
 このチャットへようこそ！ ルールをお読みください。
 
-[rules](https://t.me/dev\\_meme/3667)""",
+[rules](https://t\\.me/dev\\_meme/3667)""",
 parse_mode=ParseMode.MARKDOWN_V2)
 
 print("starting polling")
