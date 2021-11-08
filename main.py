@@ -34,11 +34,11 @@ def ping(update: Update, context: CallbackContext):
 	update.message.reply_text(f'Ping is {dt.total_seconds():.2f}s')
 
 #taken from https://core.telegram.org/bots/api#markdownv2-style
-escape_chars = "_*[]`~@()><#+-=|{}.!\\"
+ESCAPE_CHARS = "_*[]`~@()><#+-=|{}.!\\"
 def escape_md(txt: str) -> str:
 	ans = []
 	for el in txt:
-		if el in escape_chars:
+		if el in ESCAPE_CHARS:
 			ans.append("\\")
 		ans.append(el)
 	return ''.join(ans)
