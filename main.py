@@ -34,13 +34,14 @@ def ping(update: Update, context: CallbackContext):
 	update.message.reply_text(f'Ping is {dt.total_seconds():.2f}s')
 
 #taken from https://core.telegram.org/bots/api#markdownv2-style
-def escape_md(txt: str) -> str:#TODO: reformat
-	return txt.replace("\\",r"\\").replace("_",r"\_").replace("*",r"\*")\
-		.replace("[",r"\[").replace("]",r"\]").replace("`",r"\`").replace("~",r"\~")\
-		.replace("@",r"\@").replace("(",r"\(").replace(")",r"\)").replace(">",r"\>")\
-		.replace("<",r"\<").replace("#",r"\#").replace("+",r"\+").replace("-",r"\-")\
-		.replace("=",r"\=").replace("|",r"\|").replace("{",r"\{").replace("}",r"\}")\
-		.replace(".",r"\.").replace("!",r"\!")
+escape_chars = "_*[]`~@()><#+-=|{}.!\\"
+def escape_md(txt: str) -> str:
+	ans = []
+	for el in txt:
+		if el in escape_chars:
+			ans.append("\\")
+		ans.append(el)
+	return ''.join(ans)
 
 def get_mention(user):
 	if user.username == None:
