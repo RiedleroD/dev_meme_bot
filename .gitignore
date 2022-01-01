@@ -1,1 +1,3 @@
-config.json
+*.json
+*.db
+__pycache__
