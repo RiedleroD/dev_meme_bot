@@ -14,6 +14,10 @@ from telegram.message import Message
 from telegram.utils.helpers import escape_markdown
 import database
 
+
+private_chat_id = -1001218939335
+private_chat_username = 'devs_chat'
+
 print('loading/creating database')
 DB_PATH = 'memebot.db'
 db = database.UserDB(DB_PATH)
@@ -65,6 +69,21 @@ def message(filters):
 	def add_it(func):
 		updater.dispatcher.add_handler(MessageHandler(filters,func))
 	return add_it
+
+def filter_chat(id, chat):
+	'''
+	id: id of a chat
+	chat: @<chat> without @
+	'''
+	def decorator(function):
+		def wrapper(update: Update, context: CallbackContext):
+			if update.message.chat_id != id:
+				update.message.chat.send_message(f'This feature only works in chat @{chat}')
+				return
+			return function(update, context)
+		return wrapper
+	return decorator
+
 
 @command("ping")
 def ping(update: Update, context: CallbackContext):
@@ -125,6 +144,7 @@ def is_warn_possible(message: Message, command: str) -> WarnPossibleResult:
 	return WarnPossibleResult(True, None)
 
 @command("warn")
+@filter_chat(private_chat_id, private_chat_username)
 def warn_member(update: Update, context: CallbackContext):
 	warn_pos = is_warn_possible(update.message, 'warn')
 	if not warn_pos.is_possible:
@@ -140,6 +160,7 @@ def warn_member(update: Update, context: CallbackContext):
 		parse_mode=ParseMode.MARKDOWN_V2)
 
 @command("unwarn")
+@filter_chat(private_chat_id, private_chat_username)
 def unwarn_member(update: Update, context: CallbackContext):
 	can_warn = is_warn_possible(update.message, 'unwarn')
 	if not can_warn.is_possible:
@@ -161,6 +182,7 @@ def unwarn_member(update: Update, context: CallbackContext):
 		parse_mode=ParseMode.MARKDOWN_V2)
 
 @command("clearwarns")
+@filter_chat(private_chat_id, private_chat_username)
 def unwarn_member(update: Update, context: CallbackContext):
 	can_warn = is_warn_possible(update.message, 'clearwarns')
 	if not can_warn.is_possible:
@@ -173,6 +195,7 @@ def unwarn_member(update: Update, context: CallbackContext):
 		parse_mode=ParseMode.MARKDOWN_V2)
 
 @command("warns")
+@filter_chat(private_chat_id, private_chat_username)
 def warns_member(update: Update, context: CallbackContext):
 	if update.message.from_user.is_bot: # might be redundant
 		return
