@@ -11,6 +11,7 @@ from telegram import Update, ParseMode, Chat, User
 from telegram.ext import Updater, CommandHandler, MessageHandler, CallbackContext
 from telegram.ext.filters import Filters
 from telegram.message import Message
+from telegram.utils.helpers import escape_markdown
 import database
 
 print('loading/creating database')
@@ -70,15 +71,8 @@ def ping(update: Update, context: CallbackContext):
 	dt=datetime.now(update.message.date.tzinfo)-update.message.date
 	update.message.reply_text(f'Ping is {dt.total_seconds():.2f}s')
 
-#taken from https://core.telegram.org/bots/api#markdownv2-style
-ESCAPE_CHARS = "_*[]`~@()><#+-=|{}.!\\"
 def escape_md(txt: str) -> str:
-	ans = []
-	for el in txt:
-		if el in ESCAPE_CHARS:
-			ans.append("\\")
-		ans.append(el)
-	return ''.join(ans)
+	return escape_markdown(txt, 2)
 
 def get_mention(user: User):
 	return user.mention_markdown_v2()
@@ -142,7 +136,7 @@ def warn_member(update: Update, context: CallbackContext):
 	warns = db.get_warns(userid) + 1
 	db.set_warns(userid, warns)
 	update.message.chat.send_message(
-		f'{get_mention(target)} recieved a warn\\! Now they have {warns} warns',
+		f'*{get_mention(target)}* recieved a warn\\! Now they have {warns} warns',
 		parse_mode=ParseMode.MARKDOWN_V2)
 
 @command("unwarn")
@@ -158,7 +152,7 @@ def unwarn_member(update: Update, context: CallbackContext):
 	if warns > 0:
 		warns -= 1
 	db.set_warns(userid, warns)
-	reply = f'{target.mention_markdown_v2()} been a good hooman\\! '
+	reply = f'*{target.mention_markdown_v2()}* been a good hooman\\! '
 	if warns == 0:
 		reply += 'Now they don\'t have any warns'
 	else:
@@ -175,7 +169,7 @@ def unwarn_member(update: Update, context: CallbackContext):
 		return
 	target = get_warn_target(update.message)
 	db.set_warns(target.id, 0)
-	update.message.chat.send_message(f'{target.mention_markdown_v2()}\'s warns were cleared',
+	update.message.chat.send_message(f'*{target.mention_markdown_v2()}*\'s warns were cleared',
 		parse_mode=ParseMode.MARKDOWN_V2)
 
 @command("warns")
@@ -190,11 +184,11 @@ def warns_member(update: Update, context: CallbackContext):
 		return
 	warns = db.get_warns(target.id)
 	if target.is_bot:
-		update.message.reply_text(f'Bot {escape_md(target.full_name)} cannot have warns',
+		update.message.reply_text(f'Bot *{escape_md(target.full_name)}* cannot have warns',
 			parse_mode=ParseMode.MARKDOWN_V2)
 		return
 	update.message.reply_text(
-		f'{escape_md(target.full_name)} has {"no" if warns == 0 else warns} warns',
+		f'*{escape_md(target.full_name)}* has {"no" if warns == 0 else warns} warns',
 		parse_mode=ParseMode.MARKDOWN_V2)
 
 
