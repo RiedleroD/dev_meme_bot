@@ -3,6 +3,8 @@ print("loading libs")
 from os import chdir,path
 from sys import argv
 from datetime import datetime
+from typing import NamedTuple
+from threading import Event, Thread
 import json
 
 from telegram import Update, ParseMode, Chat, User
@@ -10,7 +12,6 @@ from telegram.ext import Updater, CommandHandler, MessageHandler, CallbackContex
 from telegram.ext.filters import Filters
 from telegram.message import Message
 import database
-from threading import Event, Thread
 
 print('loading/creating database')
 DB_PATH = 'memebot.json'
@@ -24,6 +25,12 @@ def save_db():
 		db.dump()
 
 class SaverThread(Thread):
+	'''
+	Class silimar to threading.Timer, but where Timer runs only once, this class runs function multiple times
+
+	To stop the loop, use function set on passed event: event.set()
+	'''
+
 	def __init__(self, event: Event, interval: float):
 		Thread.__init__(self)
 		self.stopped = event
@@ -34,20 +41,10 @@ class SaverThread(Thread):
 			save_db()
 
 print('creating saving timer')
-SAVE_INTERVAL = 10 # 5 * 60
-stopSaveFlag = Event()
-save_timer = SaverThread(stopSaveFlag, SAVE_INTERVAL)
+SAVE_INTERVAL = 5 * 60 # 5 minutes
+stop_saving_flag = Event()
+save_timer = SaverThread(stop_saving_flag, SAVE_INTERVAL)
 save_timer.start()
-
-def is_admin(chat: Chat, user: User):
-	# might wanna cache admins
-	status = chat.get_member(user.id).status
-	return status == 'creator' or status == 'administrator'
-
-def get_warn_target(message: Message):
-	if message.reply_to_message is not None:
-		return message.reply_to_message.from_user
-	return None
 
 print("reading config")
 CURDIR=path.dirname(argv[0])
@@ -83,11 +80,8 @@ def escape_md(txt: str) -> str:
 		ans.append(el)
 	return ''.join(ans)
 
-def get_mention(user):
-	if user.username == None:
-		return f"[{escape_md(user.first_name)}](tg://user?id={user.id})"
-	else:
-		return "@"+escape_md(user.username)
+def get_mention(user: User):
+	return user.mention_markdown_v2()
 
 @message(Filters.status_update.new_chat_members)
 def new_chat_member(update: Update, context: CallbackContext):
@@ -102,86 +96,107 @@ Welcome to this chat\\! Please read the rules\\.
 [rules](https://t\\.me/dev\\_meme/3667)""",
 parse_mode=ParseMode.MARKDOWN_V2)
 
+def is_admin(chat: Chat, user: User) -> bool:
+	# might wanna cache admins
+	status = chat.get_member(user.id).status
+	return status == 'creator' or status == 'administrator'
+
+def get_warn_target(message: Message) -> User | None:
+	'''
+	Returns the user that is supposed to be warned. It might be a bot.
+	Returns None if no warn target.
+	'''
+	if message.reply_to_message is not None and message.reply_to_message.from_user is not None:
+		return message.reply_to_message.from_user
+	return None
+
+class WarnPossibleResult(NamedTuple):
+	'''
+	can_warn -> can warn happen (user is admin, user is not a bot, warn target isnt bot)
+	reason -> reason why warn cannot happen, might be None
+	'''
+	is_possible: bool
+	reason: str | None
+
+def is_warn_possible(message: Message, command: str) -> WarnPossibleResult:
+	if message.from_user.is_bot: # might be redundant
+		return WarnPossibleResult(False, None)
+	if not is_admin(message.chat, message.from_user):
+		return WarnPossibleResult(False, f'You are not an admin')
+	target = get_warn_target(message)
+	if target is None:
+		return WarnPossibleResult(False, f'Please reply to a message with /{command}')
+	if target.is_bot:
+		return WarnPossibleResult(False, f'Bots cannot be warned')
+	return WarnPossibleResult(True, None)
+
 @command("warn")
 def warn_member(update: Update, context: CallbackContext):
-	if update.message.from_user.is_bot: # might be redundant
+	warn_pos = is_warn_possible(update.message, 'warn')
+	if not warn_pos.is_possible:
+		if warn_pos.reason is not None:
+			update.message.reply_text(warn_pos.reason, parse_mode=ParseMode.MARKDOWN_V2)
 		return
 	target = get_warn_target(update.message)
-	if target is None:
-		update.message.reply_text(f'Please reply to a message with /warn')
-		return
-	if target.is_bot:
-		update.message.reply_text(f'You cannot warn a bot')
-		return
-	if not is_admin(update.message.chat, update.message.from_user):
-		update.message.reply_text(f'You are not an admin')
-		return
 	userid = target.id
 	warns = db.get_warns(userid) + 1
 	db.set_warns(userid, warns)
-	update.message.reply_to_message.reply_text(
-		f'You recieved a warn!\nNow you have {warns} warns.')
+	update.message.chat.send_message(
+		f'{get_mention(target)} recieved a warn\\! Now they have {warns} warns',
+		parse_mode=ParseMode.MARKDOWN_V2)
 
 @command("unwarn")
 def unwarn_member(update: Update, context: CallbackContext):
-	if update.message.from_user.is_bot: # might be redundant
+	can_warn = is_warn_possible(update.message, 'unwarn')
+	if not can_warn.is_possible:
+		if can_warn.reason is not None:
+			update.message.reply_text(can_warn.reason, parse_mode=ParseMode.MARKDOWN_V2)
 		return
 	target = get_warn_target(update.message)
-	if target is None:
-		update.message.reply_text(f'Please reply to a message with /unwarn')
-		return
-	if target.is_bot:
-		update.message.reply_text(f'Bots do not have warns')
-		return
-	if not is_admin(update.message.chat, update.message.from_user):
-		update.message.reply_text(f'You are not an admin')
-		return
 	userid = target.id
 	warns = db.get_warns(userid)
-	if warns > 0: warns -= 1
+	if warns > 0:
+		warns -= 1
 	db.set_warns(userid, warns)
-	reply = f'You\'ve been a good hooman!\n'
+	reply = f'{target.mention_markdown_v2()} been a good hooman\\! '
 	if warns == 0:
-		reply += 'Now you don\'t have any warns.'
+		reply += 'Now they don\'t have any warns'
 	else:
-		reply += f'Now you have {warns} warns.'
-	update.message.reply_to_message.reply_text(reply)
+		reply += f'Now they have {warns} warns'
+	update.message.chat.send_message(reply,
+		parse_mode=ParseMode.MARKDOWN_V2)
 
 @command("clearwarns")
 def unwarn_member(update: Update, context: CallbackContext):
-	if update.message.from_user.is_bot: # might be redundant
+	can_warn = is_warn_possible(update.message, 'clearwarns')
+	if not can_warn.is_possible:
+		if can_warn.reason is not None:
+			update.message.reply_text(can_warn.reason, parse_mode=ParseMode.MARKDOWN_V2)
 		return
 	target = get_warn_target(update.message)
-	if target is None:
-		update.message.reply_text(f'Please reply to a message with /clearwarns')
-		return
-	if target.is_bot:
-		update.message.reply_text(f'Bots do not have warns')
-		return
-	if not is_admin(update.message.chat, update.message.from_user):
-		update.message.reply_text(f'You are not an admin')
-		return
-	userid = target.id
-	warns = 0
-	db.set_warns(userid, warns)
-	reply = f'You\'ve been a good hooman!\nNow you don\'t have any warns.'
-	update.message.reply_to_message.reply_text(reply)
+	db.set_warns(target.id, 0)
+	update.message.chat.send_message(f'{target.mention_markdown_v2()}\'s warns were cleared',
+		parse_mode=ParseMode.MARKDOWN_V2)
 
 @command("warns")
 def warns_member(update: Update, context: CallbackContext):
 	if update.message.from_user.is_bot: # might be redundant
 		return
 	target = get_warn_target(update.message)
-	if target is None:
-		userid = update.message.from_user.id
-		warns = db.get_warns(userid)
-		update.message.reply_text(f'You have {warns} warns.')
-		return
-	if target.is_bot:
-		update.message.reply_text(f'Bots do not have warns')
+	if target is None or target.id == update.message.from_user.id:
+		warns = db.get_warns(update.message.from_user.id)
+		update.message.reply_text(f'You have {"no" if warns == 0 else warns} warns',
+			parse_mode=ParseMode.MARKDOWN_V2)
 		return
 	warns = db.get_warns(target.id)
-	update.message.reply_text(f'They have {warns} warns.')
+	if target.is_bot:
+		update.message.reply_text(f'Bot {escape_md(target.full_name)} cannot have warns',
+			parse_mode=ParseMode.MARKDOWN_V2)
+		return
+	update.message.reply_text(
+		f'{escape_md(target.full_name)} has {"no" if warns == 0 else warns} warns',
+		parse_mode=ParseMode.MARKDOWN_V2)
+
 
 try:
 	print("starting polling")
@@ -189,5 +204,5 @@ try:
 	print("online")
 	updater.idle()
 finally:
-	stopSaveFlag.set()
+	stop_saving_flag.set()
 	save_db()
