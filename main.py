@@ -15,7 +15,7 @@ from telegram.utils.helpers import escape_markdown
 import database
 
 print('loading/creating database')
-DB_PATH = 'memebot.json'
+DB_PATH = 'memebot.db'
 db = database.UserDB(DB_PATH)
 
 def save_db():
@@ -184,7 +184,7 @@ def warns_member(update: Update, context: CallbackContext):
 		return
 	warns = db.get_warns(target.id)
 	if target.is_bot:
-		update.message.reply_text(f'Bot *{escape_md(target.full_name)}* cannot have warns',
+		update.message.reply_text(f'Bots don\'t have warns',
 			parse_mode=ParseMode.MARKDOWN_V2)
 		return
 	update.message.reply_text(
