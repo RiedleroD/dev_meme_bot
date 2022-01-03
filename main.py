@@ -5,15 +5,39 @@ from sys import argv
 from datetime import datetime
 import json
 
-import telegram
 from telegram import Update, ParseMode, Chat, User
 from telegram.ext import Updater, CommandHandler, MessageHandler, CallbackContext
 from telegram.ext.filters import Filters
 from telegram.message import Message
 import database
+from threading import Event, Thread
 
 print('loading/creating database')
-db = database.UserDB()
+DB_PATH = 'memebot.json'
+db = database.UserDB(DB_PATH)
+
+def save_db():
+	global db
+	if db.changed:
+		print('saving database')
+		db.changed = False
+		db.dump()
+
+class SaverThread(Thread):
+	def __init__(self, event: Event, interval: float):
+		Thread.__init__(self)
+		self.stopped = event
+		self.interval = interval
+
+	def run(self):
+		while not self.stopped.wait(self.interval):
+			save_db()
+
+print('creating saving timer')
+SAVE_INTERVAL = 10 # 5 * 60
+stopSaveFlag = Event()
+save_timer = SaverThread(stopSaveFlag, SAVE_INTERVAL)
+save_timer.start()
 
 def is_admin(chat: Chat, user: User):
 	# might wanna cache admins
@@ -165,4 +189,5 @@ try:
 	print("online")
 	updater.idle()
 finally:
-	db.dump()
+	stopSaveFlag.set()
+	save_db()
