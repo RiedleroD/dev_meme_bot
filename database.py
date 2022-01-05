@@ -45,13 +45,3 @@ class UserDB:
 		with self.mutex:
 			self.db.execute('''UPDATE users SET warncount = ? WHERE userid = ?''', (warncount, userid))
 			self.changed = True
-
-
-
-
-
-
-
-
-
-
