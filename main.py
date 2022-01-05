@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
 print("loading libs")
-from os import chdir,path
+from os import path
 from sys import argv
 from datetime import datetime
-from typing import NamedTuple
 from threading import Event, Thread
 import json
 
@@ -16,9 +15,9 @@ import database
 
 print("reading config")
 CURDIR=path.dirname(argv[0])
-CONFDIR=path.join(CURDIR,'./config.json')
-if not path.exists(CONFDIR):
-	with open(CONFDIR,'w') as f:
+CONFPATH=path.join(CURDIR,'./config.json')
+if not path.exists(CONFPATH):
+	with open(CONFPATH,'w') as f:
 		config = {
 			'token': 'Your token goes here',
 			'private_chat_id': -1001218939335,
@@ -27,9 +26,10 @@ if not path.exists(CONFDIR):
 			'database_path': 'memebot.db'
 		}
 		json.dump(config, f, indent=2)
-		print(f'Config was created in {CONFDIR}, please edit it')
+		print(f'Config was created in {CONFPATH}, please edit it')
 		exit(0)
-with open(CONFDIR,"r") as f:
+
+with open(CONFPATH,"r") as f:
 	CONFIG=json.load(f)
 
 private_chat_id = CONFIG['private_chat_id']
@@ -47,31 +47,33 @@ def save_db():
 		db.changed = False
 		db.dump()
 
-class SaverThread(Thread):
+class SaveTimer(Thread):
 	'''
 	Class silimar to threading.Timer, but where Timer runs only once,
-	this class runs function multiple times with interval
+	this class runs save function periodically, like Timer in Delphi or
+	setInterval() in js.
 
-	To stop the loop, use function set on passed event: event.set()
+	To stop the loop, use function stop()
 	'''
 
-	def __init__(self, event: Event, interval: float):
+	def __init__(self, interval: float):
 		Thread.__init__(self)
-		self.stopped = event
+		self.stopped = Event()
 		self.interval = interval
 
 	def run(self):
 		while not self.stopped.wait(self.interval):
 			save_db()
+	
+	def stop(self):
+		self.stopped.set()
 
 print('creating saving timer')
-stop_saving_flag = Event()
-save_timer = SaverThread(stop_saving_flag, SAVE_INTERVAL)
+save_timer = SaveTimer(SAVE_INTERVAL)
 save_timer.start()
 
 print("initializing commands")
 updater=Updater(CONFIG["token"])
-
 
 def escape_md(txt: str) -> str:
 	return escape_markdown(txt, 2)
@@ -89,7 +91,7 @@ def message(filters):
 		updater.dispatcher.add_handler(MessageHandler(filters,func))
 	return add_it
 
-def filter_chat(id, chat):
+def filter_chat(id: int, chat: str):
 	'''
 	id: id of a chat
 	chat: @<chat> without @
@@ -105,7 +107,6 @@ parse_mode=ParseMode.MARKDOWN_V2)
 			return function(update, context)
 		return wrapper
 	return decorator
-
 
 @command("ping")
 def ping(update: Update, context: CallbackContext):
@@ -178,7 +179,7 @@ def unwarn_member(update: Update, context: CallbackContext):
 	if warns > 0:
 		warns -= 1
 	db.set_warns(target.id, warns)
-	reply = f'*{target.mention_markdown_v2()}* has been a good hooman\\! '
+	reply = f'*{get_mention(target)}* has been a good hooman\\! '
 	if warns == 0:
 		reply += 'Now they don\'t have any warns'
 	else:
@@ -193,12 +194,12 @@ def clear_member_warns(update: Update, context: CallbackContext):
 		return
 	target = get_reply_target(update.message)
 	db.set_warns(target.id, 0)
-	update.message.chat.send_message(f'*{target.mention_markdown_v2()}*\'s warns were cleared',
+	update.message.chat.send_message(f"*{get_mention(target)}*'s warns were cleared",
 		parse_mode=ParseMode.MARKDOWN_V2)
 
 @command("warns")
 @filter_chat(private_chat_id, private_chat_username)
-def warns_member(update: Update, context: CallbackContext):
+def get_member_warns(update: Update, context: CallbackContext):
 	target = get_reply_target(update.message)
 	if target == None or target.id == update.message.from_user.id:
 		warns = db.get_warns(update.message.from_user.id)
@@ -207,7 +208,7 @@ def warns_member(update: Update, context: CallbackContext):
 		return
 	warns = db.get_warns(target.id)
 	if target.is_bot:
-		update.message.reply_text(f'Bots don\'t have warns',
+		update.message.reply_text(f"Bots don't have warns",
 			parse_mode=ParseMode.MARKDOWN_V2)
 		return
 	
@@ -215,12 +216,11 @@ def warns_member(update: Update, context: CallbackContext):
 		f'*{escape_md(target.full_name)}* has {"no" if warns == 0 else warns} warns',
 		parse_mode=ParseMode.MARKDOWN_V2)
 
-
 try:
 	print("starting polling")
 	updater.start_polling()
 	print("online")
 	updater.idle()
 finally:
-	stop_saving_flag.set()
+	save_timer.set()
 	save_db()
