@@ -1,13 +1,16 @@
 # dev_meme_bot
 
-install dependencies
+## install dependencies
 - python-telegram-bot
 
-create config.json
-- in the same directory as the main script
-- containing {"TOKEN":"%your_bot_token%"}
+## config
+rename current config.json if it exists in the same directory as the main script.
 
-commands:
+run the script, it will create config for you. you should edit it.
+
+if config has errors or missing keys, rename current config so script can create new one.
+
+## commands:
 
 {user_joins} - greets them
 
