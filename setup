@@ -1,6 +1,0 @@
-install dependencies
-- python-telegram-bot
-
-create config.json
-- in the same directory as the main script
-- containing {"TOKEN":"%your_bot_token%"}
