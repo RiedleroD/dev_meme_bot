@@ -114,6 +114,7 @@ def ping(update: Update, context: CallbackContext):
 	update.message.reply_text(f'Ping is {dt.total_seconds():.2f}s')
 
 @message(Filters.status_update.new_chat_members)
+@filter_chat(private_chat_id, private_chat_username)
 def new_chat_member(update: Update, context: CallbackContext):
 	handles=", ".join(get_mention(user) for user in update.message.new_chat_members)
 	update.message.reply_text(
