@@ -239,13 +239,13 @@ def add_trusted_user(update: Update, context: CallbackContext):
 				parse_mode=ParseMode.MARKDOWN_V2)
 		else:
 			update.message.chat.send_message(
-				f'*{get_mention(target)}* is now amongst the ranks of the **Trusted Users**!',
+				f'*{get_mention(target)}* is now amongst the ranks of the **Trusted Users**\\!',
 				parse_mode=ParseMode.MARKDOWN_V2)
 
 @command("untrust")
 @filter_chat(private_chat_id, private_chat_username)
 def del_trusted_user(update: Update, context: CallbackContext):
-	target = check_admin_to_user_action(update.message, 'trust')
+	target = check_admin_to_user_action(update.message, 'untrust')
 	if target is None:
 		return
 	
