@@ -32,11 +32,10 @@ class UserDB:
 	def ensure_user(self, userid: int):
 		with self.mutex:
 			c = self.db.cursor()
-			c.execute('''SELECT trusted FROM users WHERE userid = ?''', (userid, ))
+			c.execute('''SELECT userid FROM users WHERE userid = ?''', (userid, ))
 			fetch = c.fetchone()
 			if fetch is None:
 				self.create_user_row(userid)
-				return 0
 	
 	def get_warns(self, userid: int) -> int:
 		'''
