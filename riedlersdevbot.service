@@ -1,0 +1,15 @@
+[Unit]
+Description="Riedler's Dev Bot"
+Wants=network.target
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=python3 /home/riedler/dev_meme_bot/main.py
+WorkingDirectory=/home/riedler/dev_meme_bot/
+#User=riedler
+Restart=always
+RestartSec=1
+
+[Install]
+WantedBy=multi-user.target
