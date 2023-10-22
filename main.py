@@ -131,13 +131,15 @@ def is_admin(chat: Chat, user: User) -> bool:
 	status = chat.get_member(user.id).status
 	return status == 'creator' or status == 'administrator'
 
-def get_reply_target(message: Message) -> User | None:
+def get_reply_target(message: Message, sendback: bool = False) -> User | None:
 	'''
 	Returns the user that is supposed to be warned. It might be a bot.
 	Returns None if no warn target.
 	'''
 	if message.reply_to_message is not None:
 		return message.reply_to_message.from_user
+	if sendback:
+		message.reply_text(f'Please reply to a message with /{command}', parse_mode=ParseMode.MARKDOWN_V2)
 	return None
 
 def check_admin_to_user_action(message: Message, command: str) -> User | None:
@@ -148,9 +150,8 @@ def check_admin_to_user_action(message: Message, command: str) -> User | None:
 	if not is_admin(message.chat, message.from_user):
 		message.reply_text(f'You are not an admin', parse_mode=ParseMode.MARKDOWN_V2)
 		return None
-	target = get_reply_target(message)
+	target = get_reply_target(message, True)
 	if target is None:
-		message.reply_text(f'Please reply to a message with /{command}', parse_mode=ParseMode.MARKDOWN_V2)
 		return None
 	if target.is_bot:
 		message.reply_text(f'/{command} isn\'t usable on bots', parse_mode=ParseMode.MARKDOWN_V2)
@@ -264,6 +265,39 @@ def del_trusted_user(update: Update, context: CallbackContext):
 			update.message.chat.send_message(
 				f'*{get_mention(target)}* has fallen off hard, no cap on god frfr',
 				parse_mode=ParseMode.MARKDOWN_V2)
+
+@command("votekick")
+@filter_chat(private_chat_id, private_chat_username)
+def votekick(update: Update, context: CallbackContext):
+	target = get_reply_target(update.message, True)
+	if target is None:
+		return
+	voter = update.message.from_user
+	chat = update.message.chat
+	
+	if not (db.get_trusted(voter.id) or is_admin(chat,voter)):
+		update.message.reply_text(
+			f'Only trusted users can votekick someone\\. Sucks to suck 🤷',
+			parse_mode=ParseMode.MARKDOWN_V2)
+	elif db.get_trusted(target.id):
+		update.message.reply_text(
+			f'You can\'t votekick another trusted user',
+			parse_mode=ParseMode.MARKDOWN_V2)
+	elif is_admin(chat,target):
+		update.message.reply_text(
+			f'You can\'t votekick an admin',
+			parse_mode=ParseMode.MARKDOWN_V2)
+	else:
+		db.add_votekick(voter.id,target.id)
+		votes = db.get_votekicks(target.id)
+		appendix = "\nthat constitutes a ban\\!" if votes>=3 else ""
+		update.message.reply_text(
+			f'User {get_mention(target)} now has {votes}/3 votes against them\\.{appendix}',
+			parse_mode=ParseMode.MARKDOWN_V2)
+		if votes >= 3:
+			#NOTE: deleting all messages from a user might be a bit harsh, since it's irreversible, so I've turned it off for now.
+			# if in the future we have serious problems with spam floods, this can be turned on again
+			context.bot.ban_chat_member(chat_id=chat.id,user_id=target.id,revoke_messages=False)
 
 try:
 	print("starting polling")

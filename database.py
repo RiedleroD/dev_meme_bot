@@ -18,6 +18,12 @@ class UserDB:
 							warncount INTEGER CHECK(warncount >= 0),
 							trusted INTEGER CHECK(trusted >= 0 AND trusted <= 1)
 						)''')
+		self.db.execute('''CREATE TABLE IF NOT EXISTS votekicks(
+							voter INTEGER,
+							bad_user INTEGER,
+							timeout INTEGER,
+							PRIMARY KEY (voter,bad_user)
+						)''')
 	
 	def dump(self):
 		with self.mutex:
@@ -65,3 +71,24 @@ class UserDB:
 			c = self.db.cursor()
 			c.execute('''SELECT trusted FROM users WHERE userid = ?''', (userid, ))
 			return [False,True][c.fetchone()[0]]
+	
+	def cleanup_votekicks(self):
+		with self.mutex:
+			c = self.db.cursor()
+			c.execute('''DELETE FROM votekicks WHERE timeout < UNIXEPOCH('NOW')''')
+			c.fetchall()
+			if c.rowcount > 0:
+				self.changed = True
+	
+	def add_votekick(self, voter: int, bad_user: int):
+		self.cleanup_votekicks()
+		with self.mutex:
+			self.db.execute('''INSERT OR IGNORE INTO votekicks VALUES (?, ?, UNIXEPOCH('NOW','+24 hours'))''', (voter, bad_user))
+			self.changed = True
+	
+	def get_votekicks(self, bad_user: int) -> int:
+		self.cleanup_votekicks()
+		with self.mutex:
+			c = self.db.cursor()
+			c.execute('''SELECT COUNT(bad_user) FROM votekicks WHERE bad_user=?''',(bad_user,))
+			return c.fetchone()[0]
