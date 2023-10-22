@@ -10,6 +10,11 @@ run the script, it will create config for you. you should edit it.
 
 if config has errors or missing keys, rename current config so script can create new one.
 
+## systemd service
+simply drop it into /etc/systemd/system/
+
+set the user field if your setup doesn't work system-wide
+
 ## commands:
 
 {user_joins} - greets them
