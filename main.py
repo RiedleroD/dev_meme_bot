@@ -163,6 +163,8 @@ def warn_member(update: Update, context: CallbackContext):
 	if not is_warn_possible(update.message, 'warn'):
 		return
 	target = get_reply_target(update.message)
+	assert target is not None
+	
 	warns = db.get_warns(target.id) + 1
 	db.set_warns(target.id, warns)
 	update.message.chat.send_message(
@@ -175,6 +177,8 @@ def unwarn_member(update: Update, context: CallbackContext):
 	if not is_warn_possible(update.message, 'unwarn'):
 		return
 	target = get_reply_target(update.message)
+	assert target is not None
+	
 	warns = db.get_warns(target.id)
 	if warns > 0:
 		warns -= 1
@@ -193,6 +197,8 @@ def clear_member_warns(update: Update, context: CallbackContext):
 	if not is_warn_possible(update.message, 'clearwarns'):
 		return
 	target = get_reply_target(update.message)
+	assert target is not None
+	
 	db.set_warns(target.id, 0)
 	update.message.chat.send_message(f"*{get_mention(target)}*'s warns were cleared",
 		parse_mode=ParseMode.MARKDOWN_V2)
