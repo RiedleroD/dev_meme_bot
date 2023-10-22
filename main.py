@@ -136,7 +136,7 @@ def get_reply_target(message: Message) -> User | None:
 	Returns the user that is supposed to be warned. It might be a bot.
 	Returns None if no warn target.
 	'''
-	if message.reply_to_message != None:
+	if message.reply_to_message is not None:
 		return message.reply_to_message.from_user
 	return None
 
@@ -149,7 +149,7 @@ def is_warn_possible(message: Message, command: str) -> bool:
 		message.reply_text(f'You are not an admin', parse_mode=ParseMode.MARKDOWN_V2)
 		return False
 	target = get_reply_target(message)
-	if target == None:
+	if target is None:
 		message.reply_text(f'Please reply to a message with /{command}', parse_mode=ParseMode.MARKDOWN_V2)
 		return False
 	if target.is_bot:
@@ -201,7 +201,7 @@ def clear_member_warns(update: Update, context: CallbackContext):
 @filter_chat(private_chat_id, private_chat_username)
 def get_member_warns(update: Update, context: CallbackContext):
 	target = get_reply_target(update.message)
-	if target == None or target.id == update.message.from_user.id:
+	if target is None or target.id == update.message.from_user.id:
 		warns = db.get_warns(update.message.from_user.id)
 		update.message.reply_text(f'You have {"no" if warns == 0 else warns} warns',
 			parse_mode=ParseMode.MARKDOWN_V2)
@@ -222,5 +222,5 @@ try:
 	print("online")
 	updater.idle()
 finally:
-	save_timer.set()
+	save_timer.stop()
 	save_db()
