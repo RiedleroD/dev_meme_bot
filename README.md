@@ -21,10 +21,20 @@ set the user field if your setup doesn't work system-wide
 
 /ping - check latency
 
+/warns - check your warns or warns of a person you replied to
+
+### for trusted users:
+
+/votekick - vote to kick a user (bot will ban after 3 votes) ((votes timeout after 24h))
+
+### for moderators:
+
 /warn - add a warn to person
 
 /unwarn - removes 1 warn from person
 
 /clearwarns - clears all warns
 
-/warns - check your warns or warns of a person you replied to
+/trust - adds a user to the trusted list
+
+/untrust - remove a user from the trusted list
