@@ -140,30 +140,29 @@ def get_reply_target(message: Message) -> User | None:
 		return message.reply_to_message.from_user
 	return None
 
-def is_warn_possible(message: Message, command: str) -> bool:
+def check_admin_to_user_action(message: Message, command: str) -> User | None:
 	'''
-	It sends message if warn is not possible
-	Returns True/False if warn is possible.
+	It sends message if admin to user action is not possible and returns None
+	Returns user if it's possible.
 	'''
 	if not is_admin(message.chat, message.from_user):
 		message.reply_text(f'You are not an admin', parse_mode=ParseMode.MARKDOWN_V2)
-		return False
+		return None
 	target = get_reply_target(message)
 	if target is None:
 		message.reply_text(f'Please reply to a message with /{command}', parse_mode=ParseMode.MARKDOWN_V2)
-		return False
+		return None
 	if target.is_bot:
-		message.reply_text(f'Bots cannot be warned', parse_mode=ParseMode.MARKDOWN_V2)
-		return False
-	return True
+		message.reply_text(f'/{command} isn\'t usable on bots', parse_mode=ParseMode.MARKDOWN_V2)
+		return None
+	return target
 
 @command("warn")
 @filter_chat(private_chat_id, private_chat_username)
 def warn_member(update: Update, context: CallbackContext):
-	if not is_warn_possible(update.message, 'warn'):
+	target = check_admin_to_user_action(update.message, 'warn')
+	if target is None:
 		return
-	target = get_reply_target(update.message)
-	assert target is not None
 	
 	warns = db.get_warns(target.id) + 1
 	db.set_warns(target.id, warns)
@@ -174,10 +173,9 @@ def warn_member(update: Update, context: CallbackContext):
 @command("unwarn")
 @filter_chat(private_chat_id, private_chat_username)
 def unwarn_member(update: Update, context: CallbackContext):
-	if not is_warn_possible(update.message, 'unwarn'):
+	target = check_admin_to_user_action(update.message, 'unwarn')
+	if target is None:
 		return
-	target = get_reply_target(update.message)
-	assert target is not None
 	
 	warns = db.get_warns(target.id)
 	if warns > 0:
@@ -194,10 +192,9 @@ def unwarn_member(update: Update, context: CallbackContext):
 @command("clearwarns")
 @filter_chat(private_chat_id, private_chat_username)
 def clear_member_warns(update: Update, context: CallbackContext):
-	if not is_warn_possible(update.message, 'clearwarns'):
+	target = check_admin_to_user_action(update.message, 'clearwarns')
+	if target is None:
 		return
-	target = get_reply_target(update.message)
-	assert target is not None
 	
 	db.set_warns(target.id, 0)
 	update.message.chat.send_message(f"*{get_mention(target)}*'s warns were cleared",
@@ -221,6 +218,52 @@ def get_member_warns(update: Update, context: CallbackContext):
 	update.message.reply_text(
 		f'*{escape_md(target.full_name)}* has {"no" if warns == 0 else warns} warns',
 		parse_mode=ParseMode.MARKDOWN_V2)
+
+@command("trust")
+@filter_chat(private_chat_id, private_chat_username)
+def add_trusted_user(update: Update, context: CallbackContext):
+	target = check_admin_to_user_action(update.message, 'trust')
+	if target is None:
+		return
+	
+	trusted = db.get_trusted(target.id)
+	if trusted:
+		update.message.chat.send_message(
+			f'*{get_mention(target)}* is already trusted, silly',
+			parse_mode=ParseMode.MARKDOWN_V2)
+	else:
+		db.set_trusted(target.id, True)
+		if is_admin(update.message.chat, target):
+			update.message.chat.send_message(
+				f'*{get_mention(target)}* is already a moderater, but sure lmao',
+				parse_mode=ParseMode.MARKDOWN_V2)
+		else:
+			update.message.chat.send_message(
+				f'*{get_mention(target)}* is now amongst the ranks of the **Trusted Users**!',
+				parse_mode=ParseMode.MARKDOWN_V2)
+
+@command("untrust")
+@filter_chat(private_chat_id, private_chat_username)
+def del_trusted_user(update: Update, context: CallbackContext):
+	target = check_admin_to_user_action(update.message, 'trust')
+	if target is None:
+		return
+	
+	trusted = db.get_trusted(target.id)
+	if not trusted:
+		update.message.chat.send_message(
+			f'*{get_mention(target)}* wasn\'t trusted in the first place',
+			parse_mode=ParseMode.MARKDOWN_V2)
+	else:
+		db.set_trusted(target.id, False)
+		if is_admin(update.message.chat, target):
+			update.message.chat.send_message(
+				f'*{get_mention(target)}* is a moderater, but sure lmao',
+				parse_mode=ParseMode.MARKDOWN_V2)
+		else:
+			update.message.chat.send_message(
+				f'*{get_mention(target)}* has fallen off hard, no cap on god frfr',
+				parse_mode=ParseMode.MARKDOWN_V2)
 
 try:
 	print("starting polling")
