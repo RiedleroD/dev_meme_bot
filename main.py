@@ -300,6 +300,10 @@ def votekick(update: Update, context: CallbackContext):
 			# if in the future we have serious problems with spam floods, this can be turned on again
 			context.bot.ban_chat_member(chat_id=chat.id,user_id=target.id,revoke_messages=False)
 
+@command("kickvote") #just a simple alias for votekick, this code is not tested and there is no guarantee that it works
+@filter_chat(private_chat_id,private_chat_usernamr)
+def kickvote(update: Update, context: CallbackContext):
+	votekick(update, context)
 try:
 	print("starting polling")
 	updater.start_polling()
