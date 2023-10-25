@@ -132,15 +132,15 @@ def is_admin(chat: Chat, user: User) -> bool:
 	status = chat.get_member(user.id).status
 	return status == 'creator' or status == 'administrator'
 
-def get_reply_target(message: Message, sendback: bool = False) -> User | None:
+def get_reply_target(message: Message, sendback: str|None = None) -> User | None:
 	'''
 	Returns the user that is supposed to be warned. It might be a bot.
 	Returns None if no warn target.
 	'''
 	if message.reply_to_message is not None:
 		return message.reply_to_message.from_user
-	if sendback:
-		message.reply_text(f'Please reply to a message with /{command}', parse_mode=ParseMode.MARKDOWN_V2)
+	if sendback is not None:
+		message.reply_text(f'Please reply to a message with /{sendback}', parse_mode=ParseMode.MARKDOWN_V2)
 	return None
 
 def check_admin_to_user_action(message: Message, command: str) -> User | None:
@@ -151,7 +151,7 @@ def check_admin_to_user_action(message: Message, command: str) -> User | None:
 	if not is_admin(message.chat, message.from_user):
 		message.reply_text(f'You are not an admin', parse_mode=ParseMode.MARKDOWN_V2)
 		return None
-	target = get_reply_target(message, True)
+	target = get_reply_target(message, command)
 	if target is None:
 		return None
 	if target.is_bot:
@@ -270,7 +270,7 @@ def del_trusted_user(update: Update, context: CallbackContext):
 @command("votekick")
 @filter_chat(private_chat_id, private_chat_username)
 def votekick(update: Update, context: CallbackContext):
-	target = get_reply_target(update.message, True)
+	target = get_reply_target(update.message, 'votekick')
 	if target is None:
 		return
 	voter = update.message.from_user
