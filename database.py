@@ -21,7 +21,7 @@ class UserDB:
 		self.db.execute('''CREATE TABLE IF NOT EXISTS votekicks(
 							voter INTEGER,
 							bad_user INTEGER,
-							timeout INTEGER,
+							timeout REAL,
 							PRIMARY KEY (voter,bad_user)
 						)''')
 	
@@ -75,7 +75,7 @@ class UserDB:
 	def cleanup_votekicks(self):
 		with self.mutex:
 			c = self.db.cursor()
-			c.execute('''DELETE FROM votekicks WHERE timeout < UNIXEPOCH('NOW')''')
+			c.execute('''DELETE FROM votekicks WHERE timeout < JULIANDAY('NOW')''')
 			c.fetchall()
 			if c.rowcount > 0:
 				self.changed = True
@@ -83,7 +83,7 @@ class UserDB:
 	def add_votekick(self, voter: int, bad_user: int):
 		self.cleanup_votekicks()
 		with self.mutex:
-			self.db.execute('''INSERT OR IGNORE INTO votekicks VALUES (?, ?, UNIXEPOCH('NOW','+24 hours'))''', (voter, bad_user))
+			self.db.execute('''INSERT OR IGNORE INTO votekicks VALUES (?, ?, JULIANDAY('NOW','+24 hours'))''', (voter, bad_user))
 			self.changed = True
 	
 	def get_votekicks(self, bad_user: int) -> int:
