@@ -84,6 +84,7 @@ def get_mention(user: User):
 def command(name:str):#some python magic
 	def add_it(func):
 		updater.dispatcher.add_handler(CommandHandler(name, func))
+		return func
 	return add_it
 
 def message(filters):
