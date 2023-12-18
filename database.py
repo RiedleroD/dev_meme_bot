@@ -4,11 +4,9 @@ from threading import RLock
 class UserDB:
 	mutex: RLock
 	db: sqlite3.Connection
-	changed: bool
 	
 	def __init__(self, db_path: str):
 		self.mutex = RLock()
-		self.changed = False
 		self.open(db_path)
 
 	def open(self, db_path: str):
@@ -24,16 +22,12 @@ class UserDB:
 							timeout REAL,
 							PRIMARY KEY (voter,bad_user)
 						)''')
-	
-	def dump(self):
-		with self.mutex:
-			self.db.commit()
-			self.changed = False
+
 
 	def create_user_row(self, userid: int, warncount: int = 0, trusted: bool = False):
 		with self.mutex:
 			self.db.execute('''INSERT INTO users VALUES (?, ?, ?)''', (userid, warncount, trusted))
-			self.changed = True
+			self.db.commit()
 	
 	def ensure_user(self, userid: int):
 		with self.mutex:
@@ -57,13 +51,13 @@ class UserDB:
 		self.ensure_user(userid)
 		with self.mutex:
 			self.db.execute('''UPDATE users SET warncount = ? WHERE userid = ?''', (warncount, userid))
-			self.changed = True
+			self.db.commit()
 	
 	def set_trusted(self, userid: int, trusted: bool):
 		self.ensure_user(userid)
 		with self.mutex:
 			self.db.execute('''UPDATE users SET trusted = ? WHERE userid = ?''', (trusted, userid))
-			self.changed = True
+			self.db.commit()
 	
 	def get_trusted(self, userid: int) -> bool:
 		self.ensure_user(userid)
@@ -77,14 +71,13 @@ class UserDB:
 			c = self.db.cursor()
 			c.execute('''DELETE FROM votekicks WHERE timeout < JULIANDAY('NOW')''')
 			c.fetchall()
-			if c.rowcount > 0:
-				self.changed = True
+			self.db.commit()
 	
 	def add_votekick(self, voter: int, bad_user: int):
 		self.cleanup_votekicks()
 		with self.mutex:
 			self.db.execute('''INSERT OR IGNORE INTO votekicks VALUES (?, ?, JULIANDAY('NOW','+24 hours'))''', (voter, bad_user))
-			self.changed = True
+			self.db.commit()
 	
 	def get_votekicks(self, bad_user: int) -> int:
 		self.cleanup_votekicks()
