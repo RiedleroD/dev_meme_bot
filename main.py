@@ -22,7 +22,6 @@ if not path.exists(CONFPATH):
 			'token': 'Your token goes here',
 			'private_chat_id': -1001218939335,
 			'private_chat_username': 'devs_chat',
-			'database_save_interval': 5 * 60,
 			'database_path': 'memebot.db'
 		}
 		json.dump(config, f, indent=2)
@@ -34,43 +33,10 @@ with open(CONFPATH,"r") as f:
 
 private_chat_id = CONFIG['private_chat_id']
 private_chat_username = CONFIG['private_chat_username']
-SAVE_INTERVAL = CONFIG['database_save_interval']
 DB_PATH = path.join(CURDIR,CONFIG['database_path'])
 
 print('loading/creating database')
 db = database.UserDB(DB_PATH)
-
-def save_db():
-	global db
-	if db.changed:
-		print('saving database')
-		db.changed = False
-		db.dump()
-
-class SaveTimer(Thread):
-	'''
-	Class silimar to threading.Timer, but where Timer runs only once,
-	this class runs save function periodically, like Timer in Delphi or
-	setInterval() in js.
-
-	To stop the loop, use function stop()
-	'''
-
-	def __init__(self, interval: float):
-		Thread.__init__(self)
-		self.stopped = Event()
-		self.interval = interval
-
-	def run(self):
-		while not self.stopped.wait(self.interval):
-			save_db()
-	
-	def stop(self):
-		self.stopped.set()
-
-print('creating saving timer')
-save_timer = SaveTimer(SAVE_INTERVAL)
-save_timer.start()
 
 print("initializing commands")
 updater=Updater(CONFIG["token"])
@@ -302,11 +268,7 @@ def votekick(update: Update, context: CallbackContext):
 			# if in the future we have serious problems with spam floods, this can be turned on again
 			context.bot.ban_chat_member(chat_id=chat.id,user_id=target.id,revoke_messages=False)
 
-try:
-	print("starting polling")
-	updater.start_polling()
-	print("online")
-	updater.idle()
-finally:
-	save_timer.stop()
-	save_db()
+print("starting polling")
+updater.start_polling()
+print("online")
+updater.idle()
