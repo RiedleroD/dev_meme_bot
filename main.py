@@ -268,6 +268,7 @@ def del_trusted_user(update: Update, context: CallbackContext):
 				parse_mode=ParseMode.MARKDOWN_V2)
 
 @command("votekick")
+@command("kickvote")
 @filter_chat(private_chat_id, private_chat_username)
 def votekick(update: Update, context: CallbackContext):
 	target = get_reply_target(update.message, 'votekick')
