@@ -264,9 +264,10 @@ def votekick(update: Update, context: CallbackContext):
 			f'User {get_mention(target)} now has {votes}/3 votes against them\\.{appendix}',
 			parse_mode=ParseMode.MARKDOWN_V2)
 		if votes >= 3:
-			#NOTE: deleting all messages from a user might be a bit harsh, since it's irreversible, so I've turned it off for now.
-			# if in the future we have serious problems with spam floods, this can be turned on again
-			context.bot.ban_chat_member(chat_id=chat.id,user_id=target.id,revoke_messages=False)
+			# NOTE: deleting all messages from a user is a bit harsh, since it's irreversible, but /votekick
+			# has worked well and hasn't been abused so far. As it's mostly used to combat spam, enabling
+			# this seems fine.
+			context.bot.ban_chat_member(chat_id=chat.id,user_id=target.id,revoke_messages=True)
 
 print("starting polling")
 updater.start_polling()
