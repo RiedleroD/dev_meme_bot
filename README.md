@@ -1,7 +1,10 @@
 # dev_meme_bot
 
 ## install dependencies
-- python-telegram-bot==13.8.1
+
+```shell
+pip install -r requirements.txt
+```
 
 ## config
 rename current config.json if it exists in the same directory as the main script.
