@@ -20,24 +20,18 @@ set the user field if your setup doesn't work system-wide
 
 ## commands:
 
-{user_joins} - greets them
-
-/ping - check latency
-
-/warns - check your warns or warns of a person you replied to
+- `{user_joins}` - greets them
+- `/ping` - check latency
+- `/warns` - check your warns or warns of a person you replied to
 
 ### for trusted users:
 
-/votekick - vote to kick a user (bot will ban after 3 votes) ((votes timeout after 24h))
+- `/votekick` - vote to kick a user (bot will ban after 3 votes) ((votes timeout after 24h))
 
 ### for moderators:
 
-/warn - add a warn to person
-
-/unwarn - removes 1 warn from person
-
-/clearwarns - clears all warns
-
-/trust - adds a user to the trusted list
-
-/untrust - remove a user from the trusted list
+- `/warn` - add a warn to person
+- `/unwarn` - removes 1 warn from person
+- `/clearwarns` - clears all warns
+- `/trust` - adds a user to the trusted list
+- `/untrust` - remove a user from the trusted list
