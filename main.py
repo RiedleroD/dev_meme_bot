@@ -14,9 +14,9 @@ import database
 
 print("reading config")
 CURDIR = path.dirname(sys.argv[0])
-CONFPATH = path.join(CURDIR, './config.json')
+CONFPATH = path.join(CURDIR, 'config.json')
 if not path.exists(CONFPATH):
-	with open(CONFPATH, 'w', encoding='utf-8') as f:
+	with open(CONFPATH, 'w') as f:
 		config = {
 			'token': 'Your token goes here',
 			'private_chat_id': -1001218939335,
@@ -27,7 +27,7 @@ if not path.exists(CONFPATH):
 		print(f'Config was created in {CONFPATH}, please edit it')
 		sys.exit(0)
 
-with open(CONFPATH, encoding='utf-8') as f:
+with open(CONFPATH) as f:
 	CONFIG = json.load(f)
 
 private_chat_id = CONFIG['private_chat_id']
@@ -49,8 +49,8 @@ def get_mention(user: User):
 	return user.mention_markdown_v2()
 
 
-def on_command(name: str):  # some python magic
-	def add_it(func):
+def on_command(name: str) -> Callable[[Callable], Callable]:
+	def add_it(func: Callable) -> Callable:
 		application.add_handler(CommandHandler(name, func))
 		return func
 	return add_it
@@ -63,12 +63,12 @@ def on_message(filters: filters.BaseFilter) -> Callable[[Callable], Callable]:
 	return add_it
 
 
-def filter_chat(chat_id: int, chat: str):
+def filter_chat(chat_id: int, chat: str) -> Callable[[Callable], Callable]:
 	'''
 	chat_id: id of a chat
-	chat: @<chat> without @
+	chat: chat handle
 	'''
-	def decorator(function):
+	def decorator(function: Callable) -> Callable:
 		async def wrapper(update: Update, context: CallbackContext):
 			if update.message.chat_id != chat_id:
 				await update.message.chat.send_message(
@@ -78,8 +78,8 @@ If you want to use this bot outside that group, please contact the developer: \
 [@RiedleroD](tg://user?id=388037461)''',
 					parse_mode=ParseMode.MARKDOWN_V2
 				)
-				return
-			await function(update, context)
+			else:
+				await function(update, context)
 		return wrapper
 	return decorator
 
@@ -93,7 +93,7 @@ async def ping(update: Update, _context: CallbackContext):
 @on_message(filters.StatusUpdate.NEW_CHAT_MEMBERS)
 @filter_chat(private_chat_id, private_chat_username)
 async def new_chat_member(update: Update, _context: CallbackContext):
-	handles = ", ".join(map(get_mention, update.message.new_chat_members))
+	handles = ", ".join(get_mention(member) for member in update.message.new_chat_members)
 	await update.message.reply_text(
 		f"""{handles},
 いらっしゃいませ\\! \\[Welcome\\!\\]
