@@ -108,8 +108,8 @@ Welcome to this chat\\! Please read the rules\\.
 
 async def is_admin(chat: Chat, user: User) -> bool:
 	# might wanna cache admins
-	status = await chat.get_member(user.id).status
-	return status in ('creator', 'administrator')
+	member = await chat.get_member(user.id)
+	return member.status in ('creator', 'administrator')
 
 
 async def get_reply_target(message: Message, sendback: Optional[str] = None) -> Optional[User]:
