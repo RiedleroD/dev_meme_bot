@@ -10,6 +10,7 @@ from telegram import Update, Chat, User, Message
 from telegram.constants import ParseMode
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackContext, filters
 from telegram.helpers import escape_markdown
+from telegram.error import BadRequest
 import database
 
 print("reading config")
@@ -306,7 +307,10 @@ async def votekick(update: Update, context: CallbackContext):
 			# NOTE: bot API doesn't support deleting all messages by a user, so we only delete the last
 			# message. This is irreversible, but /votekick has worked well and hasn't been abused so far. As
 			# it's mostly used to combat spam, enabling this seems fine.
-			await update.message.reply_to_message.delete()
+			try:
+				await update.message.reply_to_message.delete()
+			except BadRequest:
+				pass # we couldn't delete this message; no biggie. There's lots of asinine restrictions on what messages can be deleted.
 
 
 print("starting polling")
