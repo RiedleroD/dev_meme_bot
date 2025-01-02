@@ -1,0 +1,13 @@
+#!/sbin/openrc-run
+
+command="/usr/bin/python3"
+command_args="/path/to/dev_meme_bot/main.py"
+command_background=true
+command_user="riedler:riedler"
+pidfile="/run/${RC_SVCNAME}.pid"
+
+description="Riedler's Dev Bot"
+
+depend() {
+	need net
+}
