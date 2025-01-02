@@ -7,16 +7,12 @@ pip install -r requirements.txt
 ```
 
 ## config
-rename current config.json if it exists in the same directory as the main script.
-
-run the script, it will create config for you. you should edit it.
-
-if config has errors or missing keys, rename current config so script can create new one.
+if there's no config yet, the script will create an example one for you. Simply edit that one with your preferred values.
 
 ## systemd service
-simply drop it into /etc/systemd/system/ and replace the relevant paths.
+simply replace the relevant paths in `riedlersdevbot.service` and drop the file into /etc/systemd/system/ .
 
-set the user field if your setup doesn't work system-wide
+uncomment and set the user field if your setup doesn't work system-wide.
 
 ## commands:
 
@@ -28,7 +24,7 @@ set the user field if your setup doesn't work system-wide
 
 - `/votekick` - vote to kick a user (bot will ban after 3 votes) ((votes timeout after 24h))
 
-### for moderators:
+### for admins:
 
 - `/warn` - add a warn to person
 - `/unwarn` - removes 1 warn from person
