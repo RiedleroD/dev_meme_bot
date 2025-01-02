@@ -5,8 +5,8 @@ After=network.target
 
 [Service]
 Type=simple
-ExecStart=python3 /home/riedler/dev_meme_bot/main.py
-WorkingDirectory=/home/riedler/dev_meme_bot/
+ExecStart=python3 /path/to/dev_meme_bot/main.py
+WorkingDirectory=/path/to/dev_meme_bot/
 #User=riedler
 Restart=always
 RestartSec=1
