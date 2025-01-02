@@ -69,9 +69,9 @@ def filter_chat(chat_id: int, chat: str):
 	chat: @<chat> without @
 	'''
 	def decorator(function):
-		def wrapper(update: Update, context: CallbackContext):
+		async def wrapper(update: Update, context: CallbackContext):
 			if update.message.chat_id != chat_id:
-				update.message.chat.send_message(
+				await update.message.chat.send_message(
 					f'''This feature only works in chat @{escape_md(chat)}
 
 If you want to use this bot outside that group, please contact the developer: \
@@ -79,7 +79,7 @@ If you want to use this bot outside that group, please contact the developer: \
 					parse_mode=ParseMode.MARKDOWN_V2
 				)
 				return
-			function(update, context)
+			await function(update, context)
 		return wrapper
 	return decorator
 
@@ -139,7 +139,7 @@ async def check_admin_to_user_action(message: Message, command: str) -> Optional
 	if target is None:
 		return None
 	if target.is_bot:
-		message.reply_text(f'/{command} isn\'t usable on bots', parse_mode=ParseMode.MARKDOWN_V2)
+		await message.reply_text(f'/{command} isn\'t usable on bots', parse_mode=ParseMode.MARKDOWN_V2)
 		return None
 	return target
 
@@ -153,7 +153,7 @@ async def warn_member(update: Update, _context: CallbackContext):
 
 	warns = db.get_warns(target.id) + 1
 	db.set_warns(target.id, warns)
-	update.message.chat.send_message(
+	await update.message.chat.send_message(
 		f'*{get_mention(target)}* recieved a warn\\! Now they have {warns} warns',
 		parse_mode=ParseMode.MARKDOWN_V2)
 
@@ -174,7 +174,7 @@ async def unwarn_member(update: Update, _context: CallbackContext):
 		reply += 'Now they don\'t have any warns'
 	else:
 		reply += f'Now they have {warns} warns'
-	update.message.chat.send_message(reply, parse_mode=ParseMode.MARKDOWN_V2)
+	await update.message.chat.send_message(reply, parse_mode=ParseMode.MARKDOWN_V2)
 
 
 @on_command("clearwarns")
@@ -185,7 +185,7 @@ async def clear_member_warns(update: Update, _context: CallbackContext):
 		return
 
 	db.set_warns(target.id, 0)
-	update.message.chat.send_message(
+	await update.message.chat.send_message(
 		f"*{get_mention(target)}*'s warns were cleared",
 		parse_mode=ParseMode.MARKDOWN_V2
 	)
@@ -222,17 +222,17 @@ async def add_trusted_user(update: Update, _context: CallbackContext):
 
 	trusted = db.get_trusted(target.id)
 	if trusted:
-		update.message.chat.send_message(
+		await update.message.chat.send_message(
 			f'*{get_mention(target)}* is already trusted, silly',
 			parse_mode=ParseMode.MARKDOWN_V2)
 	else:
 		db.set_trusted(target.id, True)
 		if await is_admin(update.message.chat, target):
-			update.message.chat.send_message(
+			await update.message.chat.send_message(
 				f'*{get_mention(target)}* is already a moderater, but sure lmao',
 				parse_mode=ParseMode.MARKDOWN_V2)
 		else:
-			update.message.chat.send_message(
+			await update.message.chat.send_message(
 				f'*{get_mention(target)}* is now amongst the ranks of the **Trusted Users**\\!',
 				parse_mode=ParseMode.MARKDOWN_V2)
 
@@ -246,17 +246,17 @@ async def del_trusted_user(update: Update, _context: CallbackContext):
 
 	trusted = db.get_trusted(target.id)
 	if not trusted:
-		update.message.chat.send_message(
+		await update.message.chat.send_message(
 			f'*{get_mention(target)}* wasn\'t trusted in the first place',
 			parse_mode=ParseMode.MARKDOWN_V2)
 	else:
 		db.set_trusted(target.id, False)
 		if await is_admin(update.message.chat, target):
-			update.message.chat.send_message(
+			await update.message.chat.send_message(
 				f'*{get_mention(target)}* is a moderater, but sure lmao',
 				parse_mode=ParseMode.MARKDOWN_V2)
 		else:
-			update.message.chat.send_message(
+			await update.message.chat.send_message(
 				f'*{get_mention(target)}* has fallen off hard, no cap on god frfr',
 				parse_mode=ParseMode.MARKDOWN_V2)
 
@@ -291,11 +291,11 @@ async def votekick(update: Update, context: CallbackContext):
 			f'User {get_mention(target)} now has {votes}/3 votes against them\\.{appendix}',
 			parse_mode=ParseMode.MARKDOWN_V2)
 		if votes >= 3:
-			context.bot.ban_chat_member(chat_id=chat.id, user_id=target.id)
+			await context.bot.ban_chat_member(chat_id=chat.id, user_id=target.id)
 			# NOTE: bot API doesn't support deleting all messages by a user, so we only delete the last
-			# message. Thi is irreversible, but /votekick has worked well and hasn't been abused so far. As
+			# message. This is irreversible, but /votekick has worked well and hasn't been abused so far. As
 			# it's mostly used to combat spam, enabling this seems fine.
-			update.message.reply_to_message.delete()
+			await update.message.reply_to_message.delete()
 
 
 print("starting polling")
