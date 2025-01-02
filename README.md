@@ -14,6 +14,9 @@ simply replace the relevant paths in `riedlersdevbot.service` and drop the file 
 
 uncomment and set the user field if your setup doesn't work system-wide.
 
+## OpenRC service
+replace relevant paths and the user in `riedlersdevbot.rcservice` and drop the file as `riedlersdevbot` into /etc/init.d/ .
+
 ## commands:
 
 - `{user_joins}` - greets them
