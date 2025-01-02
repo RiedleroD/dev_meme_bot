@@ -300,3 +300,4 @@ async def votekick(update: Update, context: CallbackContext):
 
 print("starting polling")
 application.run_polling()
+print("exiting")
