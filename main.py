@@ -155,7 +155,8 @@ async def warn_member(update: Update, _context: CallbackContext):
 	db.set_warns(target.id, warns)
 	await update.message.chat.send_message(
 		f'*{get_mention(target)}* recieved a warn\\! Now they have {warns} warns',
-		parse_mode=ParseMode.MARKDOWN_V2)
+		parse_mode=ParseMode.MARKDOWN_V2
+	)
 
 
 @on_command("unwarn")
@@ -224,17 +225,20 @@ async def add_trusted_user(update: Update, _context: CallbackContext):
 	if trusted:
 		await update.message.chat.send_message(
 			f'*{get_mention(target)}* is already trusted, silly',
-			parse_mode=ParseMode.MARKDOWN_V2)
+			parse_mode=ParseMode.MARKDOWN_V2
+		)
 	else:
 		db.set_trusted(target.id, True)
 		if await is_admin(update.message.chat, target):
 			await update.message.chat.send_message(
 				f'*{get_mention(target)}* is already a moderater, but sure lmao',
-				parse_mode=ParseMode.MARKDOWN_V2)
+				parse_mode=ParseMode.MARKDOWN_V2
+			)
 		else:
 			await update.message.chat.send_message(
 				f'*{get_mention(target)}* is now amongst the ranks of the **Trusted Users**\\!',
-				parse_mode=ParseMode.MARKDOWN_V2)
+				parse_mode=ParseMode.MARKDOWN_V2
+			)
 
 
 @on_command("untrust")
@@ -248,17 +252,20 @@ async def del_trusted_user(update: Update, _context: CallbackContext):
 	if not trusted:
 		await update.message.chat.send_message(
 			f'*{get_mention(target)}* wasn\'t trusted in the first place',
-			parse_mode=ParseMode.MARKDOWN_V2)
+			parse_mode=ParseMode.MARKDOWN_V2
+		)
 	else:
 		db.set_trusted(target.id, False)
 		if await is_admin(update.message.chat, target):
 			await update.message.chat.send_message(
 				f'*{get_mention(target)}* is a moderater, but sure lmao',
-				parse_mode=ParseMode.MARKDOWN_V2)
+				parse_mode=ParseMode.MARKDOWN_V2
+			)
 		else:
 			await update.message.chat.send_message(
 				f'*{get_mention(target)}* has fallen off hard, no cap on god frfr',
-				parse_mode=ParseMode.MARKDOWN_V2)
+				parse_mode=ParseMode.MARKDOWN_V2
+			)
 
 
 @on_command("votekick")
@@ -274,22 +281,26 @@ async def votekick(update: Update, context: CallbackContext):
 	if not (db.get_trusted(voter.id) or await is_admin(chat, voter)):
 		await update.message.reply_text(
 			'Only trusted users can votekick someone\\. Sucks to suck 🤷',
-			parse_mode=ParseMode.MARKDOWN_V2)
+			parse_mode=ParseMode.MARKDOWN_V2
+		)
 	elif db.get_trusted(target.id):
 		await update.message.reply_text(
 			'You can\'t votekick another trusted user',
-			parse_mode=ParseMode.MARKDOWN_V2)
+			parse_mode=ParseMode.MARKDOWN_V2
+		)
 	elif await is_admin(chat, target):
 		await update.message.reply_text(
 			'You can\'t votekick an admin',
-			parse_mode=ParseMode.MARKDOWN_V2)
+			parse_mode=ParseMode.MARKDOWN_V2
+		)
 	else:
 		db.add_votekick(voter.id, target.id)
 		votes = db.get_votekicks(target.id)
 		appendix = "\nthat constitutes a ban\\!" if votes >= 3 else ""
 		await update.message.reply_text(
 			f'User {get_mention(target)} now has {votes}/3 votes against them\\.{appendix}',
-			parse_mode=ParseMode.MARKDOWN_V2)
+			parse_mode=ParseMode.MARKDOWN_V2
+		)
 		if votes >= 3:
 			await context.bot.ban_chat_member(chat_id=chat.id, user_id=target.id)
 			# NOTE: bot API doesn't support deleting all messages by a user, so we only delete the last
