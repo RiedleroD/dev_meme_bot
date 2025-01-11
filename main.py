@@ -139,7 +139,7 @@ async def check_admin_to_user_action(message: Message, command: str) -> Optional
 	target = await get_reply_target(message, command)
 	if target is None:
 		return None
-	if target.is_bot:
+	if target.is_bot and message.sender_chat is not None:
 		await message.reply_text(f'/{command} isn\'t usable on bots', parse_mode=ParseMode.MARKDOWN_V2)
 		return None
 	return target
@@ -205,7 +205,7 @@ async def get_member_warns(update: Update, _context: CallbackContext):
 		)
 		return
 	warns = db.get_warns(target.id)
-	if target.is_bot:
+	if target.is_bot and update.message.sender_chat is not None:
 		await update.message.reply_text("Bots don't have warns", parse_mode=ParseMode.MARKDOWN_V2)
 		return
 
