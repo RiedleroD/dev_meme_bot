@@ -113,13 +113,13 @@ async def is_admin(chat: Chat, user: User) -> bool:
 	return member.status in ('creator', 'administrator')
 
 
-async def get_reply_target(message: Message, sendback: Optional[str] = None) -> Optional[User]:
+async def get_reply_target(message: Message, sendback: Optional[str] = None) -> tuple[User, Message | None] | None:
 	'''
 	Returns the user that is supposed to be warned. It might be a bot.
 	Returns None if no warn target.
 	'''
 	if message.reply_to_message is not None:
-		return message.reply_to_message.from_user
+		return (message.reply_to_message.from_user, message.reply_to_message)
 	if sendback is not None:
 		await message.reply_text(
 			f'The command /{sendback} only works when replying to someone',
@@ -139,10 +139,11 @@ async def check_admin_to_user_action(message: Message, command: str) -> Optional
 	target = await get_reply_target(message, command)
 	if target is None:
 		return None
-	if target.is_bot and message.sender_chat is not None:
+	tuser, tmsg = target
+	if tuser.is_bot and tmsg.sender_chat is None:
 		await message.reply_text(f'/{command} isn\'t usable on bots', parse_mode=ParseMode.MARKDOWN_V2)
 		return None
-	return target
+	return tuser
 
 
 @on_command("warn")
@@ -197,20 +198,22 @@ async def clear_member_warns(update: Update, _context: CallbackContext):
 @filter_chat(private_chat_id, private_chat_username)
 async def get_member_warns(update: Update, _context: CallbackContext):
 	target = await get_reply_target(update.message)
-	if target is None or target.id == update.message.from_user.id:
+	if target is not None:
+		tuser, tmsg = target
+	if target is None or tuser.id == update.message.from_user.id:
 		warns = db.get_warns(update.message.from_user.id)
 		await update.message.reply_text(
 			f'You have {"no" if warns == 0 else warns} warns',
 			parse_mode=ParseMode.MARKDOWN_V2
 		)
 		return
-	warns = db.get_warns(target.id)
-	if target.is_bot and update.message.sender_chat is not None:
+	warns = db.get_warns(tuser.id)
+	if tuser.is_bot and tmsg.sender_chat is None:
 		await update.message.reply_text("Bots don't have warns", parse_mode=ParseMode.MARKDOWN_V2)
 		return
 
 	await update.message.reply_text(
-		f'*{escape_md(target.full_name)}* has {"no" if warns == 0 else warns} warns',
+		f'*{escape_md(tuser.full_name)}* has {"no" if warns == 0 else warns} warns',
 		parse_mode=ParseMode.MARKDOWN_V2
 	)
 
@@ -276,10 +279,11 @@ async def votekick(update: Update, context: CallbackContext):
 	target = await get_reply_target(update.message, 'votekick')
 	if target is None:
 		return
+	tuser, tmsg = target
 	voter = update.message.from_user
 	chat = update.message.chat
 
-	if target.id == 777000:
+	if tuser.id == 777000:
 		if (db.get_trusted(voter.id) or await is_admin(chat, voter)):
 			await update.message.reply_text(
 				"You can't votekick the channel…",
@@ -292,26 +296,26 @@ async def votekick(update: Update, context: CallbackContext):
 			'Only trusted users can votekick someone',
 			parse_mode=ParseMode.MARKDOWN_V2
 		)
-	elif db.get_trusted(target.id):
+	elif db.get_trusted(tuser.id):
 		await update.message.reply_text(
 			'You can\'t votekick another trusted user',
 			parse_mode=ParseMode.MARKDOWN_V2
 		)
-	elif await is_admin(chat, target):
+	elif await is_admin(chat, tuser):
 		await update.message.reply_text(
 			'You can\'t votekick an admin',
 			parse_mode=ParseMode.MARKDOWN_V2
 		)
 	else:
-		db.add_votekick(voter.id, target.id)
-		votes = db.get_votekicks(target.id)
+		db.add_votekick(voter.id, tuser.id)
+		votes = db.get_votekicks(tuser.id)
 		appendix = "\nthat constitutes a ban\\!" if votes >= 3 else ""
 		await update.message.reply_text(
-			f'User {get_mention(target)} now has {votes}/3 votes against them\\.{appendix}',
+			f'User {get_mention(tuser)} now has {votes}/3 votes against them\\.{appendix}',
 			parse_mode=ParseMode.MARKDOWN_V2
 		)
 		if votes >= 3:
-			await context.bot.ban_chat_member(chat_id=chat.id, user_id=target.id)
+			await context.bot.ban_chat_member(chat_id=chat.id, user_id=tuser.id)
 			# NOTE: bot API doesn't support deleting all messages by a user, so we only delete the last
 			# message. This is irreversible, but /votekick has worked well and hasn't been abused so far. As
 			# it's mostly used to combat spam, enabling this seems fine.
