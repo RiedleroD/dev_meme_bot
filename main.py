@@ -279,7 +279,15 @@ async def votekick(update: Update, context: CallbackContext):
 	voter = update.message.from_user
 	chat = update.message.chat
 
-	if not (db.get_trusted(voter.id) or await is_admin(chat, voter)):
+	if target.id == 777000:
+		if (db.get_trusted(voter.id) or await is_admin(chat, voter)):
+			await update.message.reply_text(
+				"You can't votekick the channel…",
+				parse_mode=ParseMode.MARKDOWN_V2
+			)
+		else:
+			await update.message.delete()
+	elif not (db.get_trusted(voter.id) or await is_admin(chat, voter)):
 		await update.message.reply_text(
 			'Only trusted users can votekick someone',
 			parse_mode=ParseMode.MARKDOWN_V2
