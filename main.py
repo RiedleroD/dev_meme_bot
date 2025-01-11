@@ -122,7 +122,7 @@ async def get_reply_target(message: Message, sendback: Optional[str] = None) -> 
 		return message.reply_to_message.from_user
 	if sendback is not None:
 		await message.reply_text(
-			f'Please reply to a message with /{sendback}',
+			f'The command /{sendback} only works when replying to someone',
 			parse_mode=ParseMode.MARKDOWN_V2
 		)
 	return None
@@ -281,7 +281,7 @@ async def votekick(update: Update, context: CallbackContext):
 
 	if not (db.get_trusted(voter.id) or await is_admin(chat, voter)):
 		await update.message.reply_text(
-			'Only trusted users can votekick someone\\. Sucks to suck 🤷',
+			'Only trusted users can votekick someone',
 			parse_mode=ParseMode.MARKDOWN_V2
 		)
 	elif db.get_trusted(target.id):
