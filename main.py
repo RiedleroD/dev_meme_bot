@@ -309,12 +309,13 @@ async def votekick(update: Update, context: CallbackContext):
 	else:
 		db.add_votekick(voter.id, tuser.id)
 		votes = db.get_votekicks(tuser.id)
-		appendix = "\nthat constitutes a ban\\!" if votes >= 3 else ""
+		votec = len(votes)
+		appendix = "\nthat constitutes a ban\\!" if votec >= 3 else ""
 		await update.message.reply_text(
-			f'User {get_mention(tuser)} now has {votes}/3 votes against them\\.{appendix}',
+			f'User {get_mention(tuser)} now has {votec}/3 votes against them\\.{appendix}',
 			parse_mode=ParseMode.MARKDOWN_V2
 		)
-		if votes >= 3:
+		if votec >= 3:
 			await context.bot.ban_chat_member(chat_id=chat.id, user_id=tuser.id)
 			# NOTE: bot API doesn't support deleting all messages by a user, so we only delete the last
 			# message. This is irreversible, but /votekick has worked well and hasn't been abused so far. As
@@ -323,6 +324,10 @@ async def votekick(update: Update, context: CallbackContext):
 				await update.message.reply_to_message.delete()
 			except BadRequest:
 				pass # we couldn't delete this message; no biggie. There's lots of asinine restrictions on what messages can be deleted.
+
+			# award score to all eligible users
+			for userid in votes:
+				db.increment_vkscore(userid)
 
 
 print("starting polling")
