@@ -30,7 +30,7 @@ class UserDB:
 		c = self.db.execute('''PRAGMA user_version''')
 		user_version = c.fetchone()[0]
 
-		if user_version < 2:
+		if user_version < 2 and user_version >0:
 			print("upgrading DB to: v2")
 			self.db.execute('''ALTER TABLE users ADD COLUMN vkscore INTEGER DEFAULT 0 CHECK(vkscore >= 0)''')
 
