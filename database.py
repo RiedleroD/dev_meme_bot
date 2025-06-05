@@ -1,7 +1,7 @@
 import sqlite3
 from threading import RLock
 
-DB_SCHEME_VERSION = 2
+DB_SCHEME_VERSION = 3
 
 
 class UserDB:
@@ -26,15 +26,22 @@ class UserDB:
 							timeout REAL,
 							PRIMARY KEY (voter,bad_user)
 						)''')
+		self.db.execute('''CREATE TABLE IF NOT EXISTS badmessages(
+							hash BLOB PRIMARY KEY UNIQUE,
+							badness INTEGER CHECK(badness >= 0)
+						)''')
 
 		c = self.db.execute('''PRAGMA user_version''')
 		user_version = c.fetchone()[0]
 
-		if user_version < 2 and user_version > 0:
-			print("upgrading DB to: v2")
-			self.db.execute('''ALTER TABLE users ADD COLUMN vkscore INTEGER DEFAULT 0 CHECK(vkscore >= 0)''')
+		if user_version > 0:
+			if user_version < 2:
+				print("upgrading DB to: v2")
+				self.db.execute('''ALTER TABLE users ADD COLUMN vkscore INTEGER DEFAULT 0 CHECK(vkscore >= 0)''')
 
 		self.db.execute(f'''PRAGMA user_version = {DB_SCHEME_VERSION}''')
+
+		self.db.commit()
 
 	def create_user_row(self, userid: int, warncount: int = 0, trusted: bool = False):
 		with self.mutex:
@@ -120,3 +127,18 @@ class UserDB:
 		with self.mutex:
 			c = self.db.execute('''SELECT userid, vkscore FROM users WHERE vkscore >= 1''')
 			return {row[0]: row[1] for row in c.fetchall()}
+
+	def check_message_badness(self, hashdigest: bytes) -> int:
+		with self.mutex:
+			c = self.db.execute('''SELECT badness FROM badmessages WHERE hash = ?''', (hashdigest,))
+			res = c.fetchone()
+			if res is None:
+				return 0
+			else:
+				return res[0]
+
+	def set_message_badness(self, hashdigest: bytes, badness: int):
+		with self.mutex:
+			c = self.db.cursor()
+			c.execute('''INSERT OR REPLACE INTO badmessages VALUES (?, ?)''', (hashdigest, badness))
+			self.db.commit()

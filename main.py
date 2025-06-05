@@ -1,43 +1,24 @@
 #!/usr/bin/env python3
-from os import path
-import sys
 from math import floor, log10
 from datetime import datetime
 from collections.abc import Callable
-import json
+from hashlib import md5
 
 from telegram import Update
 from telegram.constants import ParseMode
 from telegram.ext import Application, CallbackContext, CommandHandler, MessageHandler, filters
-from telegram.error import BadRequest, TelegramError
+from telegram.error import TelegramError
+
 import database
-from common import escape_md, get_mention, filter_chat, is_admin, get_reply_target, check_admin_to_user_action, \
-	Leaderboard
-
-print("reading config")
-CURDIR = path.dirname(sys.argv[0])
-CONFPATH = path.join(CURDIR, 'config.json')
-if not path.exists(CONFPATH):
-	with open(CONFPATH, 'w') as f:
-		config = {
-			'token': 'Your token goes here',
-			'private_chat_id': -1001218939335,
-			'private_chat_username': 'devs_chat',
-			'database_path': 'memebot.db'
-		}
-		json.dump(config, f, indent=2)
-		print(f'Config was created in {CONFPATH}, please edit it')
-		sys.exit(0)
-
-with open(CONFPATH) as f:
-	CONFIG = json.load(f)
+from config import CONFIG
+from common import escape_md, hashdigest, get_mention, filter_chat, is_admin, get_reply_target, \
+	check_admin_to_user_action, kick_message, recent_messages, Leaderboard
 
 private_chat_id = CONFIG['private_chat_id']
 private_chat_username = CONFIG['private_chat_username']
-DB_PATH = path.join(CURDIR, CONFIG['database_path'])
 
 print('loading/creating database')
-db = database.UserDB(DB_PATH)
+db = database.UserDB(CONFIG['database_path'])
 
 print("initializing commands")
 application = Application.builder().token(CONFIG["token"]).build()
@@ -206,12 +187,20 @@ async def del_trusted_user(update: Update, _context: CallbackContext):
 @on_command("kickvote")
 @filter_chat(private_chat_id, private_chat_username)
 async def votekick(update: Update, context: CallbackContext):
+	assert update.message is not None
+
 	target = await get_reply_target(update.message, 'votekick')
 	if target is None:
 		return
+
+	assert update.message.reply_to_message is not None
+
 	tuser, tmsg = target
 	voter = update.message.from_user
 	chat = update.message.chat
+
+	assert voter is not None
+	assert chat is not None
 
 	if tuser.id == 777000:
 		if (db.get_trusted(voter.id) or await is_admin(chat, voter)):
@@ -246,14 +235,7 @@ async def votekick(update: Update, context: CallbackContext):
 			parse_mode=ParseMode.MARKDOWN_V2
 		)
 		if votec >= 3:
-			await context.bot.ban_chat_member(chat_id=chat.id, user_id=tuser.id)
-			# NOTE: bot API doesn't support deleting all messages by a user, so we only delete the last
-			# message. This is irreversible, but /votekick has worked well and hasn't been abused so far. As
-			# it's mostly used to combat spam, enabling this seems fine.
-			try:
-				await update.message.reply_to_message.delete()
-			except BadRequest:
-				pass # we couldn't delete this message; no biggie. There's lots of asinine restrictions on what messages can be deleted.
+			await kick_message(update.message.reply_to_message, context, db)
 
 			# award score to all eligible users
 			for userid in votes:
@@ -310,6 +292,21 @@ async def myrank(update: Update, context: CallbackContext):
 	else:
 		text = f"You're rank {user.rank} with {user.score} successful votekicks"
 	await update.message.reply_text(text, ParseMode.MARKDOWN_V2)
+
+@on_message(filters.TEXT)
+async def on_text_message(update: Update, context: CallbackContext):
+	if update.message is not None and update.message.text is not None:
+		assert update.message.from_user is not None
+		thishash = hashdigest(update.message.text)
+		badness = db.check_message_badness(thishash)
+		if badness >= 2:
+			await kick_message(update.message, context, db)
+		else:
+			recent_messages.append((
+				update.message.id,
+				thishash,
+				update.message.from_user.id
+			))
 
 print("starting polling")
 application.run_polling()
