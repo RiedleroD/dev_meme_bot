@@ -3,16 +3,15 @@ from os import path
 import sys
 from math import floor, log10
 from datetime import datetime
-from typing import Optional
 from collections.abc import Callable
 import json
 
-from telegram import Update, Chat, User, Message
+from telegram import Update
 from telegram.constants import ParseMode
-from telegram.ext import Application, CommandHandler, MessageHandler, CallbackContext, filters
-from telegram.helpers import escape_markdown
+from telegram.ext import Application, CallbackContext, CommandHandler, MessageHandler, filters
 from telegram.error import BadRequest, TelegramError
 import database
+from common import escape_md, get_mention, filter_chat, is_admin, get_reply_target, check_admin_to_user_action
 
 print("reading config")
 CURDIR = path.dirname(sys.argv[0])
@@ -42,49 +41,17 @@ db = database.UserDB(DB_PATH)
 print("initializing commands")
 application = Application.builder().token(CONFIG["token"]).build()
 
-
-def escape_md(txt: str) -> str:
-	return escape_markdown(txt, 2)
-
-
-def get_mention(user: User):
-	return user.mention_markdown_v2()
-
-
 def on_command(name: str) -> Callable[[Callable], Callable]:
 	def add_it(func: Callable) -> Callable:
 		application.add_handler(CommandHandler(name, func))
 		return func
 	return add_it
 
-
 def on_message(filters: filters.BaseFilter) -> Callable[[Callable], Callable]:
 	def add_it(func: Callable) -> Callable:
 		application.add_handler(MessageHandler(filters, func))
 		return func
 	return add_it
-
-
-def filter_chat(chat_id: int, chat: str) -> Callable[[Callable], Callable]:
-	'''
-	chat_id: id of a chat
-	chat: chat handle
-	'''
-	def decorator(function: Callable) -> Callable:
-		async def wrapper(update: Update, context: CallbackContext):
-			if update.message.chat_id != chat_id:
-				await update.message.chat.send_message(
-					f'''This feature only works in chat @{escape_md(chat)}
-
-If you want to use this bot outside that group, please contact the developer: \
-[@RiedleroD](tg://user?id=388037461)''',
-					parse_mode=ParseMode.MARKDOWN_V2
-				)
-			else:
-				await function(update, context)
-		return wrapper
-	return decorator
-
 
 @on_command("ping")
 async def ping(update: Update, _context: CallbackContext):
@@ -106,45 +73,6 @@ Welcome to this chat\\! Please read the rules\\.
 [rules](https://t\\.me/dev\\_meme/3667)""",
 		parse_mode=ParseMode.MARKDOWN_V2
 	)
-
-
-async def is_admin(chat: Chat, user: User) -> bool:
-	# might wanna cache admins
-	member = await chat.get_member(user.id)
-	return member.status in ('creator', 'administrator')
-
-
-async def get_reply_target(message: Message, sendback: Optional[str] = None) -> tuple[User, Message | None] | None:
-	'''
-	Returns the user that is supposed to be warned. It might be a bot.
-	Returns None if no warn target.
-	'''
-	if message.reply_to_message is not None:
-		return (message.reply_to_message.from_user, message.reply_to_message)
-	if sendback is not None:
-		await message.reply_text(
-			f'The command /{sendback} only works when replying to someone',
-			parse_mode=ParseMode.MARKDOWN_V2
-		)
-	return None
-
-
-async def check_admin_to_user_action(message: Message, command: str) -> Optional[User]:
-	'''
-	It sends message if admin to user action is not possible and returns None
-	Returns user if it's possible.
-	'''
-	if not await is_admin(message.chat, message.from_user):
-		await message.reply_text('You are not an admin', parse_mode=ParseMode.MARKDOWN_V2)
-		return None
-	target = await get_reply_target(message, command)
-	if target is None:
-		return None
-	tuser, tmsg = target
-	if tuser.is_bot and tmsg.sender_chat is None:
-		await message.reply_text(f'/{command} isn\'t usable on bots', parse_mode=ParseMode.MARKDOWN_V2)
-		return None
-	return tuser
 
 
 @on_command("warn")
