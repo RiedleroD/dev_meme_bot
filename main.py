@@ -295,6 +295,7 @@ async def myrank(update: Update, context: CallbackContext):
 
 @on_message(filters.TEXT)
 async def on_text_message(update: Update, context: CallbackContext):
+	global recent_messages
 	if update.message is not None and update.message.text is not None:
 		assert update.message.from_user is not None
 		thishash = hashdigest(update.message.text)
@@ -307,6 +308,8 @@ async def on_text_message(update: Update, context: CallbackContext):
 				thishash,
 				update.message.from_user.id
 			))
+			if len(recent_messages) > CONFIG['message_memory']:
+				recent_messages = recent_messages[-CONFIG['message_memory']:]
 
 print("starting polling")
 application.run_polling()
