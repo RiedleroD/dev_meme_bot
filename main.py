@@ -254,7 +254,7 @@ async def leaderboard(update: Update, context: CallbackContext):
 	lines = []
 
 	for user in lb.users:
-		if user.rank >= 5:
+		if user.rank > 5:
 			break
 
 		try:
