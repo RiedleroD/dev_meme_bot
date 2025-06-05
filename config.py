@@ -11,6 +11,7 @@ class Config(TypedDict):
 	database_path: str
 	message_memory: int
 	spam_threshhold: int
+	spam_minlength: int
 
 
 defaultconfig: Config = {
@@ -20,6 +21,7 @@ defaultconfig: Config = {
 	'database_path': 'memebot.db',
 	'message_memory': 100,
 	'spam_threshhold': 2,
+	'spam_minlength': 20,
 }
 
 print("reading config")

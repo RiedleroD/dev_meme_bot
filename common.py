@@ -102,28 +102,25 @@ async def kick_message(message: Message, context: CallbackContext, db: database.
 			break
 
 	assert message.text is not None
+	if len(message.text) >= CONFIG['spam_minlength']:
+		thisdigest = hashdigest(message.text)
+		badness = db.check_message_badness(thisdigest) + 1
 
-	thisdigest = hashdigest(message.text)
-	badness = db.check_message_badness(thisdigest) + 1
+		# autofiltering stuff
+		if badness >= CONFIG['spam_threshhold']:
+			for i in range(len(recent_messages) - 1, -1, -1):
+				msgid, digest, userid = recent_messages[i]
+				if digest == thisdigest:
+					badness += 1
+					await context.bot.delete_message(message.chat.id, msgid)
+					if userid not in toban:
+						toban.append(userid)
+					del recent_messages[i]
 
-	# autofiltering stuff
-	print(thisdigest)
-	print()
-	if badness >= CONFIG['spam_threshhold']:
-		for i in range(len(recent_messages) - 1, -1, -1):
-			msgid, digest, userid = recent_messages[i]
-			print(digest)
-			if digest == thisdigest:
-				badness += 1
-				await context.bot.delete_message(message.chat.id, msgid)
-				if userid not in toban:
-					toban.append(userid)
-				del recent_messages[i]
+		db.set_message_badness(thisdigest, badness)
 
 	for userid in toban:
 		await context.bot.ban_chat_member(chat_id=message.chat.id, user_id=userid)
-
-	db.set_message_badness(thisdigest, badness)
 
 class LBUser:
 	__slot__ = ('score', 'rank', 'userid')
