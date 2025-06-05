@@ -7,6 +7,8 @@ from telegram.constants import ParseMode
 from telegram.helpers import escape_markdown
 from telegram.ext import CallbackContext
 
+import database
+
 def escape_md(txt: str) -> str:
 	return escape_markdown(txt, 2)
 
@@ -75,3 +77,36 @@ async def check_admin_to_user_action(message: Message, command: str) -> Optional
 		await message.reply_text(f'/{command} isn\'t usable on bots', parse_mode=ParseMode.MARKDOWN_V2)
 		return None
 	return tuser
+
+class LBUser:
+	__slot__ = ('score', 'rank', 'userid')
+	userid: int
+	score: int
+	rank: int
+
+	def __init__(self, userid: int, score: int, rank: int):
+		self.userid = userid
+		self.score = score
+		self.rank = rank
+
+class Leaderboard:
+	__slots__ = ('scoremap', 'scores', 'users')
+	scoremap: dict[int, int]
+	scores: tuple[int, ...]
+	users: tuple[LBUser, ...]
+
+	def __init__(self, db: database.UserDB):
+		self.scoremap = db.get_all_vkscores()
+
+		userIDs = tuple(
+			sorted((userid for userid in self.scoremap.keys()), key=lambda userid: self.scoremap[userid], reverse=True)
+		)
+		self.scores = tuple(self.scoremap[userid] for userid in userIDs)
+		self.users = tuple(
+			LBUser(
+				userid,
+				self.scoremap[userid],
+				self.scores.index(self.scoremap[userid]) + 1
+			)
+			for userid in userIDs
+		)

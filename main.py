@@ -11,7 +11,8 @@ from telegram.constants import ParseMode
 from telegram.ext import Application, CallbackContext, CommandHandler, MessageHandler, filters
 from telegram.error import BadRequest, TelegramError
 import database
-from common import escape_md, get_mention, filter_chat, is_admin, get_reply_target, check_admin_to_user_action
+from common import escape_md, get_mention, filter_chat, is_admin, get_reply_target, check_admin_to_user_action, \
+	Leaderboard
 
 print("reading config")
 CURDIR = path.dirname(sys.argv[0])
@@ -263,30 +264,24 @@ async def votekick(update: Update, context: CallbackContext):
 async def leaderboard(update: Update, context: CallbackContext):
 	assert update.message is not None
 
-	scoremap = db.get_all_vkscores()
+	replypromise = update.message.reply_text("loading leaderboard…", disable_notification=True)
 
-	sorted_leaderboard = sorted((userid for userid in scoremap.keys()), key=lambda userid: scoremap[userid], reverse=True)
-	scorepos = sorted(scoremap.values(), reverse=True)
-	scoredigits = floor(log10(scorepos[0])) + 1
+	lb = Leaderboard(db)
+	scoredigits = floor(log10(lb.scores[0])) + 1
 
 	lines = []
 
-	replypromise = update.message.reply_text("loading leaderboard…", disable_notification=True)
-
-	for userid in sorted_leaderboard:
-		score = scoremap[userid]
-		placement = scorepos.index(score)
-
-		if placement >= 5:
+	for user in lb.users:
+		if user.rank >= 5:
 			break
 
 		try:
-			usermention = (await context.bot.get_chat_member(update.message.chat_id, userid)).user.mention_markdown_v2()
+			usermention = (await context.bot.get_chat_member(update.message.chat_id, user.userid)).user.mention_markdown_v2()
 		except TelegramError:
 			# couldn't find user… weird.
-			usermention = f"user `{userid}` \\(not found\\)"
+			usermention = f"user `{user.userid}` \\(not found\\)"
 
-		lines.append(f"{placement + 1}\\. `{score:{scoredigits}d}` \\- {usermention}")
+		lines.append(f"{user.rank}\\. `{user.score:{scoredigits}d}` \\- {usermention}")
 
 	reply = await replypromise
 
@@ -295,6 +290,26 @@ async def leaderboard(update: Update, context: CallbackContext):
 		parse_mode=ParseMode.MARKDOWN_V2
 	)
 
+@on_command("myrank")
+async def myrank(update: Update, context: CallbackContext):
+	assert update.message is not None
+	assert update.message.from_user is not None
+
+	lb = Leaderboard(db)
+	user = None
+	for _user in lb.users:
+		if _user.userid == update.message.from_user.id:
+			user = _user
+			break
+
+	if user is None:
+		text = "You're not on the leaderboard yet\\. " \
+			"Your score will increase with each successful votekick you participate in\\."
+		if not db.get_trusted(update.message.from_user.id):
+			text += "\nYou have to be a trusted user to participate in votekicks though\\."
+	else:
+		text = f"You're rank {user.rank} with {user.score} successful votekicks"
+	await update.message.reply_text(text, ParseMode.MARKDOWN_V2)
 
 print("starting polling")
 application.run_polling()
