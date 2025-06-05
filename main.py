@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 from os import path
 import sys
+from math import floor, log10
 from datetime import datetime
 from typing import Optional
 from collections.abc import Callable
@@ -10,7 +11,7 @@ from telegram import Update, Chat, User, Message
 from telegram.constants import ParseMode
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackContext, filters
 from telegram.helpers import escape_markdown
-from telegram.error import BadRequest
+from telegram.error import BadRequest, TelegramError
 import database
 
 print("reading config")
@@ -328,6 +329,43 @@ async def votekick(update: Update, context: CallbackContext):
 			# award score to all eligible users
 			for userid in votes:
 				db.increment_vkscore(userid)
+
+@on_command("leaderboard")
+@filter_chat(private_chat_id, private_chat_username)
+async def leaderboard(update: Update, context: CallbackContext):
+	assert update.message is not None
+
+	scoremap = db.get_all_vkscores()
+
+	sorted_leaderboard = sorted((userid for userid in scoremap.keys()), key=lambda userid: scoremap[userid], reverse=True)
+	scorepos = sorted(scoremap.values(), reverse=True)
+	scoredigits = floor(log10(scorepos[0])) + 1
+
+	lines = []
+
+	replypromise = update.message.reply_text("loading leaderboard…", disable_notification=True)
+
+	for userid in sorted_leaderboard:
+		score = scoremap[userid]
+		placement = scorepos.index(score)
+
+		if placement >= 5:
+			break
+
+		try:
+			usermention = (await context.bot.get_chat_member(update.message.chat_id, userid)).user.mention_markdown_v2()
+		except TelegramError:
+			# couldn't find user… weird.
+			usermention = f"user `{userid}` \\(not found\\)"
+
+		lines.append(f"{placement + 1}\\. `{score:{scoredigits}d}` \\- {usermention}")
+
+	reply = await replypromise
+
+	await reply.edit_text(
+		f"Leaderboard\\!\n–––\n{'\n'.join(lines)}",
+		parse_mode=ParseMode.MARKDOWN_V2
+	)
 
 
 print("starting polling")

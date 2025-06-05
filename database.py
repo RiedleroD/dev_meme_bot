@@ -115,3 +115,8 @@ class UserDB:
 		with self.mutex:
 			c = self.db.execute('''SELECT vkscore FROM users WHERE userid = ?''', (userid,))
 			return c.fetchone()[0]
+
+	def get_all_vkscores(self) -> dict[int, int]:
+		with self.mutex:
+			c = self.db.execute('''SELECT userid, vkscore FROM users WHERE vkscore >= 1''')
+			return {row[0]: row[1] for row in c.fetchall()}
