@@ -22,6 +22,8 @@ replace relevant paths and the user in `riedlersdevbot.rcservice` and drop the f
 - `{user_joins}` - greets them
 - `/ping` - check latency
 - `/warns` - check your warns or warns of a person you replied to
+- `/leaderboard` - shows the current leaderboard
+- `/myrank` - shows the rank and score of the user
 
 ### for trusted users:
 
