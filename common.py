@@ -109,7 +109,7 @@ async def kick_message(message: Message, context: CallbackContext, db: database.
 	# autofiltering stuff
 	print(thisdigest)
 	print()
-	if badness >= 2:
+	if badness >= CONFIG['spam_threshhold']:
 		for i in range(len(recent_messages) - 1, -1, -1):
 			msgid, digest, userid = recent_messages[i]
 			print(digest)

@@ -300,7 +300,7 @@ async def on_text_message(update: Update, context: CallbackContext):
 		assert update.message.from_user is not None
 		thishash = hashdigest(update.message.text)
 		badness = db.check_message_badness(thishash)
-		if badness >= 2:
+		if badness >= CONFIG['spam_threshhold']:
 			await kick_message(update.message, context, db)
 		else:
 			recent_messages.append((
