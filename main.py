@@ -71,6 +71,8 @@ async def spamkick(update: Update, context: CallbackContext):
 		if voterid != update.message.from_user.id:
 			db.increment_vkscore(voterid)
 
+	db.increment_vkscore(update.message.from_user.id)
+
 	await kick_message(update.message.reply_to_message, context, db, mark_as_spam=True)
 
 @on_command("warn")
