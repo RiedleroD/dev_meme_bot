@@ -30,7 +30,8 @@ def filter_chat(chat_id: int, chat: str) -> Callable[[Callable], Callable]:
 	'''
 	def decorator(function: Callable) -> Callable:
 		async def wrapper(update: Update, context: CallbackContext):
-			assert update.message is not None
+			if update.message is None:
+				return
 			if update.message.chat_id != chat_id:
 				await update.message.chat.send_message(
 					f'''This feature only works in chat @{escape_md(chat)}
