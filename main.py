@@ -56,10 +56,27 @@ Welcome to this chat\\! Please read the rules\\.
 		parse_mode=ParseMode.MARKDOWN_V2
 	)
 
+@on_command("spamkick")
+@on_command("kickspam")
+@filter_chat(private_chat_id, private_chat_username)
+async def spamkick(update: Update, context: CallbackContext):
+	assert update.message is not None
+	assert update.message.from_user is not None
+	target = await check_admin_to_user_action(update.message, 'spamkick', usable_on_bots=True)
+	if target is None:
+		return
+	assert update.message.reply_to_message is not None
+
+	for voterid in db.get_votekicks(target.id):
+		if voterid != update.message.from_user.id:
+			db.increment_vkscore(voterid)
+
+	await kick_message(update.message.reply_to_message, context, db, mark_as_spam=True)
 
 @on_command("warn")
 @filter_chat(private_chat_id, private_chat_username)
 async def warn_member(update: Update, _context: CallbackContext):
+	assert update.message is not None
 	target = await check_admin_to_user_action(update.message, 'warn')
 	if target is None:
 		return

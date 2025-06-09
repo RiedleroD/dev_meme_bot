@@ -69,7 +69,7 @@ async def get_reply_target(message: Message, sendback: Optional[str] = None) -> 
 	return None
 
 
-async def check_admin_to_user_action(message: Message, command: str) -> Optional[User]:
+async def check_admin_to_user_action(message: Message, command: str, usable_on_bots: bool = False) -> Optional[User]:
 	'''
 	It sends message if admin to user action is not possible and returns None
 	Returns user if it's possible.
@@ -81,12 +81,12 @@ async def check_admin_to_user_action(message: Message, command: str) -> Optional
 	if target is None:
 		return None
 	tuser, tmsg = target
-	if tuser.is_bot and tmsg.sender_chat is None:
+	if (not usable_on_bots) and tuser.is_bot and tmsg.sender_chat is None:
 		await message.reply_text(f'/{command} isn\'t usable on bots', parse_mode=ParseMode.MARKDOWN_V2)
 		return None
 	return tuser
 
-async def kick_message(message: Message, context: CallbackContext, db: database.UserDB):
+async def kick_message(message: Message, context: CallbackContext, db: database.UserDB, mark_as_spam: bool = False):
 	'''
 	Removes a message, bans the user, and does all the necessary autofiltering stuff
 	'''
@@ -104,7 +104,12 @@ async def kick_message(message: Message, context: CallbackContext, db: database.
 	assert message.text is not None
 	if len(message.text) >= CONFIG['spam_minlength']:
 		thisdigest = hashdigest(message.text)
-		badness = db.check_message_badness(thisdigest) + 1
+		badness = db.check_message_badness(thisdigest)
+
+		if mark_as_spam:
+			badness += CONFIG['spam_threshhold']
+		else:
+			badness += 1
 
 		# autofiltering stuff
 		if badness >= CONFIG['spam_threshhold']:
