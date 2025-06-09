@@ -2,7 +2,6 @@
 from math import floor, log10
 from datetime import datetime
 from collections.abc import Callable
-from hashlib import md5
 
 from telegram import Update
 from telegram.constants import ParseMode
