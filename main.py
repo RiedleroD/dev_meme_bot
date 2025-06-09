@@ -11,7 +11,8 @@ from telegram.error import TelegramError
 import database
 from config import CONFIG
 from common import escape_md, hashdigest, get_mention, filter_chat, is_admin, get_reply_target, \
-	check_admin_to_user_action, kick_message, recent_messages, Leaderboard
+	check_admin_to_user_action, kick_message, Leaderboard
+import common
 
 private_chat_id = CONFIG['private_chat_id']
 private_chat_username = CONFIG['private_chat_username']
@@ -294,7 +295,6 @@ async def myrank(update: Update, context: CallbackContext):
 
 @on_message(filters.TEXT)
 async def on_text_message(update: Update, context: CallbackContext):
-	global recent_messages
 	if update.message is not None and update.message.text is not None:
 		assert update.message.from_user is not None
 		thishash = hashdigest(update.message.text)
@@ -302,13 +302,13 @@ async def on_text_message(update: Update, context: CallbackContext):
 		if badness >= CONFIG['spam_threshhold']:
 			await kick_message(update.message, context, db)
 		else:
-			recent_messages.append((
+			common.recent_messages.append((
 				update.message.id,
 				thishash,
 				update.message.from_user.id
 			))
-			if len(recent_messages) > CONFIG['message_memory']:
-				recent_messages = recent_messages[-CONFIG['message_memory']:]
+			if len(common.recent_messages) > CONFIG['message_memory']:
+				common.recent_messages = common.recent_messages[-CONFIG['message_memory']:]
 
 print("starting polling")
 application.run_polling()
