@@ -103,7 +103,7 @@ async def kick_message(message: Message, context: CallbackContext, db: database.
 			break
 
 	if message.text is None: # TODO: find out what the hell causes this
-		await message.reply_text("ERROR: could not get message text (wtf?)")
+		await context.bot.send_message(CONFIG['private_chat_id'], "ERROR: could not get message text (wtf?)")
 	if message.text is not None and len(message.text) >= CONFIG['spam_minlength']:
 		thisdigest = hashdigest(message.text)
 		badness = db.check_message_badness(thisdigest)
