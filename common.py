@@ -93,6 +93,7 @@ async def kick_message(message: Message, context: CallbackContext, db: database.
 	'''
 	assert message.from_user is not None
 	toban = [message.from_user.id]
+	msgtext = message.text # we may need to cache this beforehand
 	try:
 		await message.delete()
 	except BadRequest:
@@ -102,10 +103,10 @@ async def kick_message(message: Message, context: CallbackContext, db: database.
 			del recent_messages[i]
 			break
 
-	if message.text is None: # TODO: find out what the hell causes this
+	if msgtext is None: # TODO: find out what the hell causes this
 		await context.bot.send_message(CONFIG['private_chat_id'], "ERROR: could not get message text (wtf?)")
-	if message.text is not None and len(message.text) >= CONFIG['spam_minlength']:
-		thisdigest = hashdigest(message.text)
+	if msgtext is not None and len(msgtext) >= CONFIG['spam_minlength']:
+		thisdigest = hashdigest(msgtext)
 		badness = db.check_message_badness(thisdigest)
 
 		if mark_as_spam:
