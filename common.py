@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+from sys import stderr
 from typing import Optional
 from collections.abc import Callable
 from hashlib import md5
@@ -92,43 +93,47 @@ async def kick_message(message: Message, context: CallbackContext, db: database.
 	Removes a message, bans the user, and does all the necessary autofiltering stuff
 	'''
 	assert message.from_user is not None
-	toban = [message.from_user.id]
-	msgtext = message.text # we may need to cache this beforehand
-	try:
-		await message.delete()
-	except BadRequest:
-		pass # we couldn't delete this message; no biggie. There's lots of weird restrictions on what messages can be deleted.
+	toban = set([message.from_user.id])
+	todel = set([message.id])
 	for i in range(len(recent_messages)):
 		if recent_messages[i][0] == message.id:
 			del recent_messages[i]
 			break
+	try:
+		if message.text is not None and len(message.text) >= CONFIG['spam_minlength']:
+			thisdigest = hashdigest(message.text)
+			badness = db.check_message_badness(thisdigest)
 
-	if msgtext is None: # TODO: find out what the hell causes this
-		await context.bot.send_message(CONFIG['private_chat_id'], "ERROR: could not get message text (wtf?)")
-	if msgtext is not None and len(msgtext) >= CONFIG['spam_minlength']:
-		thisdigest = hashdigest(msgtext)
-		badness = db.check_message_badness(thisdigest)
+			if mark_as_spam:
+				badness += CONFIG['spam_threshhold']
+			else:
+				badness += 1
 
-		if mark_as_spam:
-			badness += CONFIG['spam_threshhold']
-		else:
-			badness += 1
+			# autofiltering stuff
+			if badness >= CONFIG['spam_threshhold']:
+				for i in reversed(range(len(recent_messages))):
+					msgid, digest, userid = recent_messages[i]
+					if digest == thisdigest:
+						badness += 1
+						todel.add(msgid)
+						toban.add(userid)
+						del recent_messages[i]
 
-		# autofiltering stuff
-		if badness >= CONFIG['spam_threshhold']:
-			for i in range(len(recent_messages) - 1, -1, -1):
-				msgid, digest, userid = recent_messages[i]
-				if digest == thisdigest:
-					badness += 1
-					await context.bot.delete_message(message.chat.id, msgid)
-					if userid not in toban:
-						toban.append(userid)
-					del recent_messages[i]
-
-		db.set_message_badness(thisdigest, badness)
-
-	for userid in toban:
-		await context.bot.ban_chat_member(chat_id=message.chat.id, user_id=userid)
+			db.set_message_badness(thisdigest, badness)
+			if len(todel) > 1:
+				await context.bot.send_message(message.chat.id, f"cleared {len(todel) - 1} additional spam messages")
+	finally:
+		for userid in toban:
+			try:
+				await context.bot.ban_chat_member(chat_id=message.chat.id, user_id=userid)
+			except:
+				print(f"couldn't ban user {userid}", file=stderr)
+		for msgid in todel:
+			try:
+				await context.bot.delete_message(message.chat.id, msgid)
+			except BadRequest:
+				# we couldn't delete this message; no biggie. There's lots of weird restrictions on what messages can be deleted.
+				print(f"couldn't delete message {userid}", file=stderr)
 
 class LBUser:
 	__slot__ = ('score', 'rank', 'userid')
