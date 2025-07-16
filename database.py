@@ -112,6 +112,7 @@ class UserDB:
 		with self.mutex:
 			c = self.db.cursor()
 			c.execute('''DELETE FROM votekicks WHERE timeout < JULIANDAY('NOW')''')
+			c.fetchall()
 			self.db.commit()
 
 	def get_expired_messages(self) -> list[int]:
@@ -132,6 +133,7 @@ class UserDB:
 				WHERE bad_user NOT IN (
 					SELECT bad_user FROM votekicks
 				);''')
+			c.fetchall()
 			self.db.commit()
 			return msgs
 
