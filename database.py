@@ -28,7 +28,7 @@ class UserDB:
 						)''')
 		self.db.execute('''CREATE TABLE IF NOT EXISTS vk_messages(
 							bad_user INTEGER,
-							msg INTEGER
+							msg_id INTEGER
 						)''')
 		self.db.execute('''CREATE TABLE IF NOT EXISTS badmessages(
 							hash BLOB PRIMARY KEY UNIQUE,
@@ -92,39 +92,37 @@ class UserDB:
 			c.execute('''SELECT trusted FROM users WHERE userid = ?''', (userid,))
 			return bool(c.fetchone()[0])
 
-	def add_vk_messages(self, bad_user: int, msgs: list[int]):
+	def add_vk_messages(self, bad_user: int, msg_ids: list[int]):
 		'''
-		Adds `msgs` to the list of messages associated
+		Adds `msg_ids` to the list of messages associated
 		with `bad_user`'s votekick.
 		'''
 		with self.mutex:
-			for msg in msgs:
+			for msg_id in msg_ids:
 				self.db.execute(
 					'''INSERT INTO vk_messages VALUES (?, ?)''',
-					(bad_user, msg)
+					(bad_user, msg_id)
 				)
 			self.db.commit()
 
-	def end_votekick(self, bad_user: int):
-		'''
-		Removes data about `bad_user`'s votekick.
-		Called after a successful votekick.
-		'''
-		with self.mutex:
-			c = self.db.cursor()
-			c.execute('''DELETE FROM votekicks where bad_user=?''', (bad_user,))
-			self.db.commit()
-
-	def cleanup_votekicks(self) -> list[int]:
+	def cleanup_votekicks(self):
 		'''
 		Cleans up outdated votekick data from the database
-		and returns the list of messages to be removed.
 		'''
 		with self.mutex:
 			c = self.db.cursor()
 			c.execute('''DELETE FROM votekicks WHERE timeout < JULIANDAY('NOW')''')
+			self.db.commit()
+
+	def get_expired_messages(self) -> list[int]:
+		'''
+		Returns the list of messages to be deleted
+		and removes them from the database
+		'''
+		with self.mutex:
+			c = self.db.cursor()
 			c.execute('''
-				SELECT msg FROM vk_messages
+				SELECT msg_id FROM vk_messages
 				WHERE bad_user NOT IN (
 					SELECT bad_user FROM votekicks
 				);''')
@@ -138,14 +136,16 @@ class UserDB:
 			return msgs
 
 	def add_votekick(self, voter: int, bad_user: int):
+		self.cleanup_votekicks()
 		with self.mutex:
 			self.db.execute(
-				'''INSERT OR IGNORE INTO votekicks VALUES (?, ?, JULIANDAY('NOW','+24 hours'))''',
+				'''INSERT OR IGNORE INTO votekicks VALUES (?, ?, JULIANDAY('NOW','+24 seconds'))''',
 				(voter, bad_user)
 			)
 			self.db.commit()
 
 	def get_votekicks(self, bad_user: int) -> list[int]:
+		self.cleanup_votekicks()
 		with self.mutex:
 			c = self.db.cursor()
 			c.execute('''SELECT voter FROM votekicks WHERE bad_user=?''', (bad_user,))
