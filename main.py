@@ -260,7 +260,7 @@ async def votekick(update: Update, context: CallbackContext):
 		await asyncio.sleep(5)
 		await context.bot.delete_messages(chat.id, [update.message.message_id, reply.message_id])
 	else:
-		votes_required = 1
+		votes_required = 3
 		
 		db.add_votekick(voter.id, tuser.id)
 		votes = db.get_votekicks(tuser.id)
