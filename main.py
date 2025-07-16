@@ -23,6 +23,14 @@ db = database.UserDB(CONFIG['database_path'])
 print("initializing commands")
 application = Application.builder().token(CONFIG["token"]).build()
 
+async def remove_vk_messages(context):
+	msgs = db.cleanup_votekicks()
+	if msgs:
+		await context.bot.delete_messages(private_chat_id, msgs)
+
+application.job_queue.run_repeating(remove_vk_messages, interval=60, first=0)
+
+
 def on_command(name: str) -> Callable[[Callable], Callable]:
 	def add_it(func: Callable) -> Callable:
 		application.add_handler(CommandHandler(name, func))
@@ -223,42 +231,54 @@ async def votekick(update: Update, context: CallbackContext):
 
 	if tuser.id == 777000:
 		if (db.get_trusted(voter.id) or await is_admin(chat, voter)):
-			await update.message.reply_text(
+			reply = await update.message.reply_text(
 				"You can't votekick the channel…",
 				parse_mode=ParseMode.MARKDOWN_V2
 			)
+			db.add_vk_messages(tuser.id, [update.message.message_id, reply.message_id])
 		else:
 			await update.message.delete()
 	elif not (db.get_trusted(voter.id) or await is_admin(chat, voter)):
-		await update.message.reply_text(
+		reply = await update.message.reply_text(
 			'Only trusted users can votekick someone',
 			parse_mode=ParseMode.MARKDOWN_V2
 		)
+		db.add_vk_messages(tuser.id, [update.message.message_id, reply.message_id])
 	elif db.get_trusted(tuser.id):
-		await update.message.reply_text(
+		reply = await update.message.reply_text(
 			'You can\'t votekick another trusted user',
 			parse_mode=ParseMode.MARKDOWN_V2
 		)
+		db.add_vk_messages(tuser.id, [update.message.message_id, reply.message_id])
 	elif await is_admin(chat, tuser):
-		await update.message.reply_text(
+		reply = await update.message.reply_text(
 			'You can\'t votekick an admin',
 			parse_mode=ParseMode.MARKDOWN_V2
 		)
+		db.add_vk_messages(tuser.id, [update.message.message_id, reply.message_id])
 	else:
 		db.add_votekick(voter.id, tuser.id)
 		votes = db.get_votekicks(tuser.id)
 		votec = len(votes)
 		appendix = "\nthat constitutes a ban\\!" if votec >= 3 else ""
-		await update.message.reply_text(
+		reply = await update.message.reply_text(
 			f'User {get_mention(tuser)} now has {votec}/3 votes against them\\.{appendix}',
 			parse_mode=ParseMode.MARKDOWN_V2
 		)
+		
 		if votec >= 3:
+			# don't remove the bot's final message
+			db.add_vk_messages(tuser.id, [update.message.message_id])
+
 			await kick_message(update.message.reply_to_message, context, db)
 
 			# award score to all eligible users
 			for userid in votes:
 				db.increment_vkscore(userid)
+
+			db.end_votekick(tuser.id)
+		else:
+			db.add_vk_messages(tuser.id, [update.message.message_id, reply.message_id])
 
 @on_command("leaderboard")
 @filter_chat(private_chat_id, private_chat_username)
