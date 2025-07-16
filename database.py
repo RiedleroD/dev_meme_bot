@@ -139,7 +139,7 @@ class UserDB:
 		self.cleanup_votekicks()
 		with self.mutex:
 			self.db.execute(
-				'''INSERT OR IGNORE INTO votekicks VALUES (?, ?, JULIANDAY('NOW','+24 seconds'))''',
+				'''INSERT OR IGNORE INTO votekicks VALUES (?, ?, JULIANDAY('NOW','+24 hours'))''',
 				(voter, bad_user)
 			)
 			self.db.commit()
