@@ -30,6 +30,7 @@ async def delete_vk_messages(context):
 	if msgs:
 		await context.bot.delete_messages(private_chat_id, msgs)
 
+# comment this out if you don't want to check for messages to be removed every 60 seconds
 application.job_queue.run_repeating(delete_vk_messages, interval=60, first=0)
 
 
@@ -232,33 +233,25 @@ async def votekick(update: Update, context: CallbackContext):
 	assert chat is not None
 
 	if not (db.get_trusted(voter.id) or await is_admin(chat, voter)):
-		reply = await update.message.reply_text(
+		await update.message.reply_text(
 			'Only trusted users can votekick someone',
 			parse_mode=ParseMode.MARKDOWN_V2
 		)
-		await asyncio.sleep(5)
-		await context.bot.delete_messages(chat.id, [update.message.message_id, reply.message_id])
-	elif tuser.id == 777000:
-		reply = await update.message.reply_text(
+        elif tuser.id == 777000:
+		await update.message.reply_text(
 			'You can\'t votekick the channel…',
 			parse_mode=ParseMode.MARKDOWN_V2
 		)
-		await asyncio.sleep(5)
-		await context.bot.delete_messages(chat.id, [update.message.message_id, reply.message_id])
 	elif db.get_trusted(tuser.id):
-		reply = await update.message.reply_text(
+		await update.message.reply_text(
 			'You can\'t votekick another trusted user',
 			parse_mode=ParseMode.MARKDOWN_V2
 		)
-		await asyncio.sleep(5)
-		await context.bot.delete_messages(chat.id, [update.message.message_id, reply.message_id])
 	elif await is_admin(chat, tuser):
-		reply = await update.message.reply_text(
+		await update.message.reply_text(
 			'You can\'t votekick an admin',
 			parse_mode=ParseMode.MARKDOWN_V2
 		)
-		await asyncio.sleep(5)
-		await context.bot.delete_messages(chat.id, [update.message.message_id, reply.message_id])
 	else:
 		votes_required = 3
 		
@@ -282,6 +275,8 @@ async def votekick(update: Update, context: CallbackContext):
 				db.increment_vkscore(userid)
 		else:
 			db.add_vk_messages(tuser.id, [update.message.message_id, reply.message_id])
+	        # uncomment to check for messages to be removed after /votekick is called
+	        # await delete_vk_messages(context)
 
 @on_command("leaderboard")
 @filter_chat(private_chat_id, private_chat_username)
