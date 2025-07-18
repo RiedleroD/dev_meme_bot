@@ -275,8 +275,8 @@ async def votekick(update: Update, context: CallbackContext):
 				db.increment_vkscore(userid)
 		else:
 			db.add_vk_messages(tuser.id, [update.message.message_id, reply.message_id])
-	        # uncomment to check for messages to be removed after /votekick is called
-	        # await delete_vk_messages(context)
+	# uncomment to check for messages to be removed after /votekick is called
+	# await delete_vk_messages(context)
 
 @on_command("leaderboard")
 @filter_chat(private_chat_id, private_chat_username)
