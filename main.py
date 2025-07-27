@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-import asyncio
 from math import floor, log10
 from datetime import datetime
 from collections.abc import Callable
