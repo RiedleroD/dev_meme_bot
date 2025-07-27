@@ -30,8 +30,10 @@ async def delete_vk_messages(context):
 	if msgs:
 		await context.bot.delete_messages(private_chat_id, msgs)
 
-# comment this out if you don't want to check for messages to be removed every 60 seconds
-application.job_queue.run_repeating(delete_vk_messages, interval=60, first=0)
+if CONFIG['autodelete_every_seconds'] is not None:
+	if application.job_queue is None:
+		raise Exception("missing requirement: python-telegram-bot[job-queue]")
+	application.job_queue.run_repeating(delete_vk_messages, interval=CONFIG['autodelete_every_seconds'], first=0)
 
 
 def on_command(name: str) -> Callable[[Callable], Callable]:
@@ -278,8 +280,10 @@ async def votekick(update: Update, context: CallbackContext):
 				db.increment_vkscore(userid)
 		else:
 			db.add_vk_messages(tuser.id, [update.message.message_id, reply.message_id])
-	# uncomment to check for messages to be removed after /votekick is called
-	# await delete_vk_messages(context)
+
+	# immediately delete instead of queueing deletion if config says so
+	if CONFIG['autodelete_every_seconds'] is None:
+		await delete_vk_messages(context)
 
 @on_command("leaderboard")
 @filter_chat(private_chat_id, private_chat_username)

@@ -12,6 +12,7 @@ class Config(TypedDict):
 	message_memory: int
 	spam_threshhold: int
 	spam_minlength: int
+	autodelete_every_seconds: None | int
 
 
 defaultconfig: Config = {
@@ -22,6 +23,7 @@ defaultconfig: Config = {
 	'message_memory': 100,
 	'spam_threshhold': 2,
 	'spam_minlength': 20,
+	'autodelete_every_seconds': None,
 }
 
 print("reading config")
