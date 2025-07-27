@@ -26,6 +26,10 @@ class UserDB:
 							timeout REAL,
 							PRIMARY KEY (voter,bad_user)
 						)''')
+		self.db.execute('''CREATE TABLE IF NOT EXISTS vk_messages(
+							bad_user INTEGER,
+							msg_id INTEGER
+						)''')
 		self.db.execute('''CREATE TABLE IF NOT EXISTS badmessages(
 							hash BLOB PRIMARY KEY UNIQUE,
 							badness INTEGER CHECK(badness >= 0)
@@ -88,12 +92,50 @@ class UserDB:
 			c.execute('''SELECT trusted FROM users WHERE userid = ?''', (userid,))
 			return bool(c.fetchone()[0])
 
+	def add_vk_messages(self, bad_user: int, msg_ids: list[int]):
+		'''
+		Adds `msg_ids` to the list of messages associated
+		with `bad_user`'s votekick.
+		'''
+		with self.mutex:
+			for msg_id in msg_ids:
+				self.db.execute(
+					'''INSERT INTO vk_messages VALUES (?, ?)''',
+					(bad_user, msg_id)
+				)
+			self.db.commit()
+
 	def cleanup_votekicks(self):
+		'''
+		Cleans up outdated votekick data from the database
+		'''
 		with self.mutex:
 			c = self.db.cursor()
 			c.execute('''DELETE FROM votekicks WHERE timeout < JULIANDAY('NOW')''')
 			c.fetchall()
 			self.db.commit()
+
+	def get_expired_messages(self) -> list[int]:
+		'''
+		Returns the list of messages to be deleted
+		and removes them from the database
+		'''
+		with self.mutex:
+			c = self.db.cursor()
+			c.execute('''
+				SELECT msg_id FROM vk_messages
+				WHERE bad_user NOT IN (
+					SELECT bad_user FROM votekicks
+				);''')
+			msgs = [row[0] for row in c.fetchall()]
+			c.execute('''
+				DELETE FROM vk_messages
+				WHERE bad_user NOT IN (
+					SELECT bad_user FROM votekicks
+				);''')
+			c.fetchall()
+			self.db.commit()
+			return msgs
 
 	def add_votekick(self, voter: int, bad_user: int):
 		self.cleanup_votekicks()
