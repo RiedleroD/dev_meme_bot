@@ -257,8 +257,8 @@ async def votekick(update: Update, context: CallbackContext):
 			parse_mode=ParseMode.MARKDOWN_V2
 		)
 	else:
-		votes_required = 3
-		
+		votes_required = CONFIG['votes_required']
+
 		db.add_votekick(voter.id, tuser.id)
 		votes = db.get_votekicks(tuser.id)
 		votec = len(votes)

@@ -13,6 +13,7 @@ class Config(TypedDict):
 	spam_threshhold: int
 	spam_minlength: int
 	autodelete_every_seconds: None | int
+	votes_required: int
 
 
 defaultconfig: Config = {
@@ -24,6 +25,7 @@ defaultconfig: Config = {
 	'spam_threshhold': 2,
 	'spam_minlength': 20,
 	'autodelete_every_seconds': None,
+	'votes_required': 3,
 }
 
 print("reading config")
