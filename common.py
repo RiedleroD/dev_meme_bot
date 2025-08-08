@@ -122,6 +122,9 @@ async def kick_message(message: Message, context: CallbackContext, db: database.
 			db.set_message_badness(thisdigest, badness)
 			if len(todel) > 1:
 				await context.bot.send_message(message.chat.id, f"cleared {len(todel) - 1} additional spam messages")
+
+			# immediately delete any messages associated with this votekick to unclog chat
+			todel.update(db.pop_vk_messages(message.from_user.id))
 	finally:
 		for userid in toban:
 			try:

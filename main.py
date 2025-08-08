@@ -25,7 +25,7 @@ application = Application.builder().token(CONFIG["token"]).build()
 
 async def delete_vk_messages(context):
 	db.cleanup_votekicks()
-	msgs = db.get_expired_messages()
+	msgs = db.pop_expired_messages()
 	if msgs:
 		await context.bot.delete_messages(private_chat_id, msgs)
 

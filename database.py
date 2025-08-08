@@ -115,7 +115,7 @@ class UserDB:
 			c.fetchall()
 			self.db.commit()
 
-	def get_expired_messages(self) -> list[int]:
+	def pop_expired_messages(self) -> list[int]:
 		'''
 		Returns the list of messages to be deleted
 		and removes them from the database
@@ -134,6 +134,25 @@ class UserDB:
 					SELECT bad_user FROM votekicks
 				);''')
 			c.fetchall()
+			self.db.commit()
+			return msgs
+
+	def pop_vk_messages(self, bad_user: int) -> list[int]:
+		'''
+		Returns the list of messages associated with the votekick for the user with ID `bad_user`
+		and removes them from the database
+		'''
+		with self.mutex:
+			c = self.db.cursor()
+			c.execute(
+				'''SELECT msg_id FROM vk_messages WHERE bad_user=?''',
+				(bad_user, )
+			)
+			msgs = [row[0] for row in c.fetchall()]
+			c.execute(
+				'''DELETE FROM vk_messages WHERE bad_user=?''',
+				(bad_user, )
+			)
 			self.db.commit()
 			return msgs
 
