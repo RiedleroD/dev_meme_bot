@@ -88,6 +88,18 @@ async def check_admin_to_user_action(message: Message, command: str, usable_on_b
 		return None
 	return tuser
 
+def remove_from_recent_messages(*args: int):
+	c = len(args)
+	# reverse iterate over list, so we can remove per-index without accounting for any offsets
+	for i in reversed(range(len(recent_messages))):
+		if recent_messages[i][0] in args:
+			del recent_messages[i]
+			c -= 1
+
+			# found all messages to delete, exit loop
+			if c <= 0:
+				break
+
 async def kick_message(message: Message, context: CallbackContext, db: database.UserDB, mark_as_spam: bool = False):
 	'''
 	Removes a message, bans the user, and does all the necessary autofiltering stuff
@@ -95,10 +107,11 @@ async def kick_message(message: Message, context: CallbackContext, db: database.
 	assert message.from_user is not None
 	toban = set([message.from_user.id])
 	todel = set([message.id])
-	for i in range(len(recent_messages)):
-		if recent_messages[i][0] == message.id:
-			del recent_messages[i]
-			break
+
+	# immediately delete any messages associated with this votekick to unclog chat
+	todel.update(db.pop_vk_messages(message.from_user.id))
+	# get rid of deleted messages in memory so we can remember more potentially important messages
+	remove_from_recent_messages(*todel)
 	try:
 		if message.text is not None and len(message.text) >= CONFIG['spam_minlength']:
 			thisdigest = hashdigest(message.text)
@@ -109,6 +122,7 @@ async def kick_message(message: Message, context: CallbackContext, db: database.
 			else:
 				badness += 1
 
+			autofiltered = 0
 			# autofiltering stuff
 			if badness >= CONFIG['spam_threshhold']:
 				for i in reversed(range(len(recent_messages))):
@@ -118,13 +132,12 @@ async def kick_message(message: Message, context: CallbackContext, db: database.
 						todel.add(msgid)
 						toban.add(userid)
 						del recent_messages[i]
+						autofiltered += 1
 
 			db.set_message_badness(thisdigest, badness)
-			if len(todel) > 1:
-				await context.bot.send_message(message.chat.id, f"cleared {len(todel) - 1} additional spam messages")
-
-			# immediately delete any messages associated with this votekick to unclog chat
-			todel.update(db.pop_vk_messages(message.from_user.id))
+			if autofiltered > 0:
+				plural = 's' if autofiltered >= 2 else ''
+				await context.bot.send_message(message.chat.id, f"cleared {autofiltered} additional spam message{plural}")
 	finally:
 		for userid in toban:
 			try:
