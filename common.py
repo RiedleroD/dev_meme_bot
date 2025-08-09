@@ -147,9 +147,9 @@ async def kick_message(message: Message, context: CallbackContext, db: database.
 		for msgid in todel:
 			try:
 				await context.bot.delete_message(message.chat.id, msgid)
-			except BadRequest:
+			except BadRequest as e:
 				# we couldn't delete this message; no biggie. There's lots of weird restrictions on what messages can be deleted.
-				print(f"couldn't delete message {userid}", file=stderr)
+				print(f"couldn't delete message {userid}: {e.message}", file=stderr)
 
 class LBUser:
 	__slot__ = ('score', 'rank', 'userid')
