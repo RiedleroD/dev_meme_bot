@@ -2,6 +2,7 @@
 from math import floor, log10
 from datetime import datetime
 from collections.abc import Callable
+import re
 
 from telegram import Update
 from telegram.constants import ParseMode
@@ -340,18 +341,20 @@ async def myrank(update: Update, context: CallbackContext):
 async def on_text_message(update: Update, context: CallbackContext):
 	if update.message is not None and update.message.text is not None:
 		assert update.message.from_user is not None
-		thishash = hashdigest(update.message.text)
-		badness = db.check_message_badness(thishash)
-		if badness >= CONFIG['spam_threshhold']:
-			await kick_message(update.message, context, db)
-		else:
-			common.recent_messages.append((
-				update.message.id,
-				thishash,
-				update.message.from_user.id
-			))
-			if len(common.recent_messages) > CONFIG['message_memory']:
-				common.recent_messages = common.recent_messages[-CONFIG['message_memory']:]
+		urls = re.findall(r"https?://[^\s]+", update.message.text)
+		if urls:
+			thishash = hashdigest(urls[0])
+			badness = db.check_message_badness(thishash)
+			if badness >= CONFIG['spam_threshhold']:
+				await kick_message(update.message, context, db)
+			else:
+				common.recent_messages.append((
+					update.message.id,
+					thishash,
+					update.message.from_user.id
+				))
+				if len(common.recent_messages) > CONFIG['message_memory']:
+					common.recent_messages = common.recent_messages[-CONFIG['message_memory']:]
 
 print("starting polling")
 application.run_polling()
