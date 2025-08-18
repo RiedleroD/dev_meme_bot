@@ -3,6 +3,7 @@ from sys import stderr
 from typing import Optional
 from collections.abc import Callable
 from hashlib import md5
+import re
 
 from telegram import Chat, Update, User, Message
 from telegram.constants import ParseMode
@@ -113,8 +114,9 @@ async def kick_message(message: Message, context: CallbackContext, db: database.
 	# get rid of deleted messages in memory so we can remember more potentially important messages
 	remove_from_recent_messages(*todel)
 	try:
-		if message.text is not None and len(message.text) >= CONFIG['spam_minlength']:
-			thisdigest = hashdigest(message.text)
+		urls = re.findall(r"https?://[^\s]+", update.message.text)
+		if urls:
+			thisdigest = hashdigest(urls[0])
 			badness = db.check_message_badness(thisdigest)
 
 			if mark_as_spam:
