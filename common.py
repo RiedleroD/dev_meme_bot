@@ -3,6 +3,7 @@ from sys import stderr
 from typing import Optional
 from collections.abc import Callable
 from hashlib import md5
+import re
 
 from telegram import Chat, Update, User, Message
 from telegram.constants import ParseMode
