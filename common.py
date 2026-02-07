@@ -4,11 +4,11 @@ from typing import Optional
 from collections.abc import Callable
 from hashlib import md5
 
-from telegram import Chat, Update, User, Message
+from telegram import Chat, Update, User, Message, Bot
 from telegram.constants import ParseMode
 from telegram.helpers import escape_markdown
 from telegram.ext import CallbackContext
-from telegram.error import BadRequest
+from telegram.error import BadRequest, TelegramError
 
 import database
 from config import CONFIG
@@ -147,16 +147,28 @@ async def kick_message(
 				await context.bot.send_message(message.chat.id, f"cleared {autofiltered} additional spam message{plural}")
 	finally:
 		for userid in toban:
-			try:
-				await context.bot.ban_chat_member(chat_id=message.chat.id, user_id=userid)
-			except:
-				print(f"couldn't ban user {userid}", file=stderr)
+			await ban_user(context, message.chat.id, userid, message.sender_chat)
 		for msgid in todel:
 			try:
 				await context.bot.delete_message(message.chat.id, msgid)
 			except BadRequest as e:
 				# we couldn't delete this message; no biggie. There's lots of weird restrictions on what messages can be deleted.
 				print(f"couldn't delete message {userid}: {e.message}", file=stderr)
+
+async def ban_user(context: CallbackContext, chatid: int, userid: int, sender_chat: Chat | None) -> None:
+	pass # ban_chat_sender_chat
+	bot: Bot = context.bot
+	if ischannel := (sender_chat is not None):
+		banid = sender_chat.id
+		ban = bot.ban_chat_sender_chat(chatid, sender_chat.id)
+	else:
+		banid = userid
+		ban = bot.ban_chat_member(chatid, userid)
+
+	try:
+		await ban
+	except TelegramError as e:
+		print(f"couldn't ban {'channel' if ischannel else 'user'} {banid} ({e.message})", file=stderr)
 
 class LBUser:
 	__slot__ = ('score', 'rank', 'userid')
