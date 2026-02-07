@@ -3,7 +3,7 @@ from math import floor, log10
 from datetime import datetime
 from collections.abc import Callable
 
-from telegram import Update
+from telegram import Update, Bot
 from telegram.constants import ParseMode
 from telegram.ext import Application, CallbackContext, CommandHandler, MessageHandler, filters
 from telegram.error import TelegramError
@@ -22,6 +22,9 @@ db = database.UserDB(CONFIG['database_path'])
 
 print("initializing commands")
 application = Application.builder().token(CONFIG["token"]).build()
+if application.job_queue is None:
+	raise Exception("missing requirement: python-telegram-bot[job-queue]")
+
 
 async def delete_vk_messages(context: CallbackContext) -> None:
 	db.cleanup_votekicks()
@@ -29,10 +32,31 @@ async def delete_vk_messages(context: CallbackContext) -> None:
 	if msgs:
 		await context.bot.delete_messages(private_chat_id, msgs)
 
+async def check_sneaky_bitches(context: CallbackContext) -> None:
+	toban = []
+
+	bot: Bot = context.bot # needed because my LSP doesn't see the type of context.bot otherwise
+	for i, (msgid, usrid, chatid) in enumerate(common.join_messages):
+		# checks whether message exists
+		success = await bot.set_message_reaction(private_chat_id, msgid, None)
+		if not success:
+			toban.append(i)
+
+	print(f"banning {len(toban)} sneaky bitches out of {len(common.join_messages)}")
+
+	for i in reversed(toban):
+		msgid, userid, chatid = common.join_messages.pop(i)
+		await common.ban_user(context, private_chat_id, usrid, chatid)
+
+	if len(toban) > 0:
+		await bot.send_message(private_chat_id, f"banned {len(toban)} sneaky bitches")
+
+async def cleanup(context: CallbackContext) -> None:
+	await delete_vk_messages(context)
+	await check_sneaky_bitches(context)
+
 if CONFIG['autodelete_every_seconds'] is not None:
-	if application.job_queue is None:
-		raise Exception("missing requirement: python-telegram-bot[job-queue]")
-	application.job_queue.run_repeating(delete_vk_messages, interval=CONFIG['autodelete_every_seconds'], first=0)
+	application.job_queue.run_repeating(cleanup, interval=CONFIG['autodelete_every_seconds'], first=0)
 
 
 def on_command(name: str) -> Callable[[Callable], Callable]:
@@ -352,14 +376,20 @@ async def on_text_message(update: Update, context: CallbackContext) -> None:
 		badness = db.check_message_badness(thishash)
 		if badness >= CONFIG['spam_threshhold']:
 			await kick_message(update.message, context, db)
+		elif len(update.message.new_chat_members) > 0: # join message
+			await common.register_joinmsg(update.message)
+
+			if CONFIG['autodelete_every_seconds'] is None:
+				assert application.job_queue is not None
+				if not len(application.job_queue.get_jobs_by_name(check_sneaky_bitches.__name__)) > 0:
+					application.job_queue.run_once(check_sneaky_bitches, 10)
 		else:
 			common.recent_messages.append((
 				update.message.id,
 				thishash,
 				update.message.from_user.id
 			))
-			if len(common.recent_messages) > CONFIG['message_memory']:
-				common.recent_messages = common.recent_messages[-CONFIG['message_memory']:]
+			common.trunc_msgmem(common.recent_messages)
 
 print("starting polling")
 application.run_polling()

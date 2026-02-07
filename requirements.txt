@@ -1,3 +1,2 @@
 python-telegram-bot>=20.0
-# optional for deleting messages on a timer
-# python-telegram-bot[job-queue]
+python-telegram-bot[job-queue]

@@ -13,7 +13,39 @@ from telegram.error import BadRequest, TelegramError
 import database
 from config import CONFIG
 
-recent_messages: list[tuple[int, bytes, int]] = []
+recent_messages: list[tuple[int, bytes, int]] = [] # msgid, digest, userid
+join_messages: list[tuple[int, int, int | None]] = [] # msgid, userid, chatid
+
+def trunc_msgmem(l: list) -> None:
+	while len(l) > CONFIG['message_memory']:
+		l.pop(0)
+
+async def register_joinmsg(msg: Message) -> None:
+	if (newjoinc := len(msg.new_chat_members)) != 1:
+		await msg.reply_text(f"DEBUG: what the hell is this? found {newjoinc} new_chat_members: {msg.new_chat_members}")
+		return
+	if msg.from_user is None:
+		await msg.reply_text(
+			"DEBUG: HOW is this join message not from a user??"
+		)
+		return
+	if msg.new_chat_members[0].id != msg.from_user.id:
+		await msg.reply_text(
+			f"DEBUG: what the fuck? new chat member {msg.new_chat_members[0].id} != {msg.from_user.id}"
+		)
+		return
+
+	if msg.sender_chat is not None:
+		chatid = msg.sender_chat.id
+	else:
+		chatid = None
+
+	join_messages.append((
+		msg.id,
+		msg.from_user.id,
+		chatid,
+	))
+	trunc_msgmem(join_messages)
 
 def escape_md(txt: str) -> str:
 	return escape_markdown(txt, 2)
@@ -147,7 +179,7 @@ async def kick_message(
 				await context.bot.send_message(message.chat.id, f"cleared {autofiltered} additional spam message{plural}")
 	finally:
 		for userid in toban:
-			await ban_user(context, message.chat.id, userid, message.sender_chat)
+			await ban_user(context, message.chat.id, userid, message.sender_chat.id if message.sender_chat else None)
 		for msgid in todel:
 			try:
 				await context.bot.delete_message(message.chat.id, msgid)
@@ -155,20 +187,21 @@ async def kick_message(
 				# we couldn't delete this message; no biggie. There's lots of weird restrictions on what messages can be deleted.
 				print(f"couldn't delete message {userid}: {e.message}", file=stderr)
 
-async def ban_user(context: CallbackContext, chatid: int, userid: int, sender_chat: Chat | None) -> None:
+async def ban_user(context: CallbackContext, chatid: int, userid: int, sender_chat: int | None) -> None:
 	pass # ban_chat_sender_chat
 	bot: Bot = context.bot
 	if ischannel := (sender_chat is not None):
-		banid = sender_chat.id
-		ban = bot.ban_chat_sender_chat(chatid, sender_chat.id)
+		ban = bot.ban_chat_sender_chat(chatid, sender_chat)
 	else:
-		banid = userid
 		ban = bot.ban_chat_member(chatid, userid)
 
 	try:
 		await ban
 	except TelegramError as e:
-		print(f"couldn't ban {'channel' if ischannel else 'user'} {banid} ({e.message})", file=stderr)
+		print(
+			f"couldn't ban {'channel' if ischannel else 'user'} {sender_chat if ischannel else userid} ({e.message})",
+			file=stderr
+		)
 
 class LBUser:
 	__slot__ = ('score', 'rank', 'userid')
