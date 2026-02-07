@@ -18,7 +18,7 @@ recent_messages: list[tuple[int, bytes, int]] = []
 def escape_md(txt: str) -> str:
 	return escape_markdown(txt, 2)
 
-def get_mention(user: User):
+def get_mention(user: User) -> str:
 	return user.mention_markdown_v2()
 
 def hashdigest(text: str) -> bytes:
@@ -30,7 +30,7 @@ def filter_chat(chat_id: int, chat: str) -> Callable[[Callable], Callable]:
 	chat: chat handle
 	'''
 	def decorator(function: Callable) -> Callable:
-		async def wrapper(update: Update, context: CallbackContext):
+		async def wrapper(update: Update, context: CallbackContext) -> None:
 			if update.message is None:
 				return
 			if update.message.chat_id != chat_id:
@@ -52,7 +52,7 @@ async def is_admin(chat: Chat, user: User) -> bool:
 	return member.status in ('creator', 'administrator')
 
 
-async def get_reply_target(message: Message, sendback: Optional[str] = None) -> tuple[User, Message | None] | None:
+async def get_reply_target(message: Message, sendback: Optional[str] = None) -> tuple[User, Message] | None:
 	'''
 	Returns the user that is supposed to be warned. It might be a bot.
 	Returns None if no warn target.
@@ -76,6 +76,8 @@ async def check_admin_to_user_action(message: Message, command: str, usable_on_b
 	It sends message if admin to user action is not possible and returns None
 	Returns user if it's possible.
 	'''
+	assert message.from_user is not None
+
 	if not await is_admin(message.chat, message.from_user):
 		await message.reply_text('You are not an admin', parse_mode=ParseMode.MARKDOWN_V2)
 		return None
@@ -88,7 +90,7 @@ async def check_admin_to_user_action(message: Message, command: str, usable_on_b
 		return None
 	return tuser
 
-def remove_from_recent_messages(*args: int):
+def remove_from_recent_messages(*args: int) -> None:
 	c = len(args)
 	# reverse iterate over list, so we can remove per-index without accounting for any offsets
 	for i in reversed(range(len(recent_messages))):
@@ -100,7 +102,12 @@ def remove_from_recent_messages(*args: int):
 			if c <= 0:
 				break
 
-async def kick_message(message: Message, context: CallbackContext, db: database.UserDB, mark_as_spam: bool = False):
+async def kick_message(
+	message: Message,
+	context: CallbackContext,
+	db: database.UserDB,
+	mark_as_spam: bool = False
+) -> None:
 	'''
 	Removes a message, bans the user, and does all the necessary autofiltering stuff
 	'''

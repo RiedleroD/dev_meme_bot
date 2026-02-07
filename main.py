@@ -23,7 +23,7 @@ db = database.UserDB(CONFIG['database_path'])
 print("initializing commands")
 application = Application.builder().token(CONFIG["token"]).build()
 
-async def delete_vk_messages(context):
+async def delete_vk_messages(context: CallbackContext) -> None:
 	db.cleanup_votekicks()
 	msgs = db.pop_expired_messages()
 	if msgs:
@@ -48,14 +48,16 @@ def on_message(filters: filters.BaseFilter) -> Callable[[Callable], Callable]:
 	return add_it
 
 @on_command("ping")
-async def ping(update: Update, _context: CallbackContext):
+async def ping(update: Update, _context: CallbackContext) -> None:
+	assert update.message is not None
 	dt = datetime.now(update.message.date.tzinfo) - update.message.date
 	await update.message.reply_text(f'Ping is {dt.total_seconds():.2f}s')
 
 
 @on_message(filters.StatusUpdate.NEW_CHAT_MEMBERS)
 @filter_chat(private_chat_id, private_chat_username)
-async def new_chat_member(update: Update, _context: CallbackContext):
+async def new_chat_member(update: Update, _context: CallbackContext) -> None:
+	assert update.message is not None
 	handles = ", ".join(get_mention(member) for member in update.message.new_chat_members)
 	await update.message.reply_text(
 		f"""{handles},
@@ -71,7 +73,7 @@ Welcome to this chat\\! Please read the rules\\.
 @on_command("spamkick")
 @on_command("kickspam")
 @filter_chat(private_chat_id, private_chat_username)
-async def spamkick(update: Update, context: CallbackContext):
+async def spamkick(update: Update, context: CallbackContext) -> None:
 	assert update.message is not None
 	assert update.message.from_user is not None
 	target = await check_admin_to_user_action(update.message, 'spamkick', usable_on_bots=True)
@@ -89,7 +91,7 @@ async def spamkick(update: Update, context: CallbackContext):
 
 @on_command("warn")
 @filter_chat(private_chat_id, private_chat_username)
-async def warn_member(update: Update, _context: CallbackContext):
+async def warn_member(update: Update, _context: CallbackContext) -> None:
 	assert update.message is not None
 	target = await check_admin_to_user_action(update.message, 'warn')
 	if target is None:
@@ -105,7 +107,8 @@ async def warn_member(update: Update, _context: CallbackContext):
 
 @on_command("unwarn")
 @filter_chat(private_chat_id, private_chat_username)
-async def unwarn_member(update: Update, _context: CallbackContext):
+async def unwarn_member(update: Update, _context: CallbackContext) -> None:
+	assert update.message is not None
 	target = await check_admin_to_user_action(update.message, 'unwarn')
 	if target is None:
 		return
@@ -124,7 +127,8 @@ async def unwarn_member(update: Update, _context: CallbackContext):
 
 @on_command("clearwarns")
 @filter_chat(private_chat_id, private_chat_username)
-async def clear_member_warns(update: Update, _context: CallbackContext):
+async def clear_member_warns(update: Update, _context: CallbackContext) -> None:
+	assert update.message is not None
 	target = await check_admin_to_user_action(update.message, 'clearwarns')
 	if target is None:
 		return
@@ -138,7 +142,9 @@ async def clear_member_warns(update: Update, _context: CallbackContext):
 
 @on_command("warns")
 @filter_chat(private_chat_id, private_chat_username)
-async def get_member_warns(update: Update, _context: CallbackContext):
+async def get_member_warns(update: Update, _context: CallbackContext) -> None:
+	assert update.message is not None
+	assert update.message.from_user is not None
 	target = await get_reply_target(update.message)
 	if target is not None:
 		tuser, tmsg = target
@@ -162,7 +168,8 @@ async def get_member_warns(update: Update, _context: CallbackContext):
 
 @on_command("trust")
 @filter_chat(private_chat_id, private_chat_username)
-async def add_trusted_user(update: Update, _context: CallbackContext):
+async def add_trusted_user(update: Update, _context: CallbackContext) -> None:
+	assert update.message is not None
 	target = await check_admin_to_user_action(update.message, 'trust')
 	if target is None:
 		return
@@ -189,7 +196,8 @@ async def add_trusted_user(update: Update, _context: CallbackContext):
 
 @on_command("untrust")
 @filter_chat(private_chat_id, private_chat_username)
-async def del_trusted_user(update: Update, _context: CallbackContext):
+async def del_trusted_user(update: Update, _context: CallbackContext) -> None:
+	assert update.message is not None
 	target = await check_admin_to_user_action(update.message, 'untrust')
 	if target is None:
 		return
@@ -217,7 +225,7 @@ async def del_trusted_user(update: Update, _context: CallbackContext):
 @on_command("votekick")
 @on_command("kickvote")
 @filter_chat(private_chat_id, private_chat_username)
-async def votekick(update: Update, context: CallbackContext):
+async def votekick(update: Update, context: CallbackContext) -> None:
 	assert update.message is not None
 
 	target = await get_reply_target(update.message, 'votekick')
@@ -286,7 +294,7 @@ async def votekick(update: Update, context: CallbackContext):
 
 @on_command("leaderboard")
 @filter_chat(private_chat_id, private_chat_username)
-async def leaderboard(update: Update, context: CallbackContext):
+async def leaderboard(update: Update, context: CallbackContext) -> None:
 	assert update.message is not None
 
 	replypromise = update.message.reply_text("loading leaderboard…", disable_notification=True)
@@ -316,7 +324,7 @@ async def leaderboard(update: Update, context: CallbackContext):
 	)
 
 @on_command("myrank")
-async def myrank(update: Update, context: CallbackContext):
+async def myrank(update: Update, context: CallbackContext) -> None:
 	assert update.message is not None
 	assert update.message.from_user is not None
 
@@ -337,7 +345,7 @@ async def myrank(update: Update, context: CallbackContext):
 	await update.message.reply_text(text, ParseMode.MARKDOWN_V2)
 
 @on_message(filters.TEXT)
-async def on_text_message(update: Update, context: CallbackContext):
+async def on_text_message(update: Update, context: CallbackContext) -> None:
 	if update.message is not None and update.message.text is not None:
 		assert update.message.from_user is not None
 		thishash = hashdigest(update.message.text)
