@@ -95,7 +95,7 @@ def remove_from_recent_messages(*args: int) -> None:
 	# reverse iterate over list, so we can remove per-index without accounting for any offsets
 	for i in reversed(range(len(recent_messages))):
 		if recent_messages[i][0] in args:
-			del recent_messages[i]
+			recent_messages.pop(i)
 			c -= 1
 
 			# found all messages to delete, exit loop
