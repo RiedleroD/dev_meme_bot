@@ -14,6 +14,7 @@ class Config(TypedDict):
 	spam_minlength: int
 	autodelete_every_seconds: None | int
 	votes_required: int
+	scamlists: list[str]
 
 
 defaultconfig: Config = {
@@ -26,6 +27,7 @@ defaultconfig: Config = {
 	'spam_minlength': 20,
 	'autodelete_every_seconds': None,
 	'votes_required': 3,
+	'scamlists': ["furry"],
 }
 
 print("reading config")
