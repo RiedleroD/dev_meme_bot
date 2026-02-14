@@ -13,6 +13,7 @@ from config import CONFIG
 from common import escape_md, hashdigest, get_mention, filter_chat, is_admin, get_reply_target, \
 	check_admin_to_user_action, kick_message, Leaderboard
 import common
+from scamlists import MasterSL
 
 private_chat_id = CONFIG['private_chat_id']
 private_chat_username = CONFIG['private_chat_username']
@@ -20,11 +21,13 @@ private_chat_username = CONFIG['private_chat_username']
 print('loading/creating database')
 db = database.UserDB(CONFIG['database_path'])
 
+print('grabbing scamlists')
+scamlist = MasterSL()
+
 print("initializing commands")
 application = Application.builder().token(CONFIG["token"]).build()
 if application.job_queue is None:
 	raise Exception("missing requirement: python-telegram-bot[job-queue]")
-
 
 async def delete_vk_messages(context: CallbackContext) -> None:
 	db.cleanup_votekicks()
@@ -46,7 +49,7 @@ async def check_sneaky_bitches(context: CallbackContext) -> None:
 
 	for i in reversed(toban):
 		msgid, userid, chatid = common.join_messages.pop(i)
-		await common.ban_user(context, private_chat_id, usrid, chatid)
+		await common.ban_user(context, usrid, chatid)
 
 	if len(toban) > 0:
 		await bot.send_message(private_chat_id, f"banned {len(toban)} sneaky bitches")
@@ -56,7 +59,7 @@ async def cleanup(context: CallbackContext) -> None:
 	await check_sneaky_bitches(context)
 
 if CONFIG['autodelete_every_seconds'] is not None:
-	application.job_queue.run_repeating(cleanup, interval=CONFIG['autodelete_every_seconds'], first=0)
+	application.job_queue.run_repeating(cleanup, interval=CONFIG['autodelete_every_seconds'], first=1)
 
 
 def on_command(name: str) -> Callable[[Callable], Callable]:
@@ -377,12 +380,17 @@ async def on_text_message(update: Update, context: CallbackContext) -> None:
 		if badness >= CONFIG['spam_threshhold']:
 			await kick_message(update.message, context, db)
 		elif len(update.message.new_chat_members) > 0: # join message
-			await common.register_joinmsg(update.message)
+			bannedc = await common.check_user_against_scamlist(context, update.message.new_chat_members, scamlist.idlist)
 
-			if CONFIG['autodelete_every_seconds'] is None:
-				assert application.job_queue is not None
-				if not len(application.job_queue.get_jobs_by_name(check_sneaky_bitches.__name__)) > 0:
-					application.job_queue.run_once(check_sneaky_bitches, 10)
+			if bannedc > 0:
+
+			else:
+				await common.register_joinmsg(update.message)
+
+				if CONFIG['autodelete_every_seconds'] is None:
+					assert application.job_queue is not None
+					if not len(application.job_queue.get_jobs_by_name(check_sneaky_bitches.__name__)) > 0:
+						application.job_queue.run_once(check_sneaky_bitches, 10)
 		else:
 			common.recent_messages.append((
 				update.message.id,
@@ -390,6 +398,11 @@ async def on_text_message(update: Update, context: CallbackContext) -> None:
 				update.message.from_user.id
 			))
 			common.trunc_msgmem(common.recent_messages)
+
+async def update_scamlist(context: CallbackContext) -> None:
+	scamlist.update()
+
+job = application.job_queue.run_repeating(update_scamlist, interval=60 * 60 * 2, first=1) # update lists every 2h
 
 print("starting polling")
 application.run_polling()

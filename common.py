@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 from sys import stderr
 from typing import Optional
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from hashlib import md5
 
 from telegram import Chat, Update, User, Message, Bot
@@ -179,7 +179,7 @@ async def kick_message(
 				await context.bot.send_message(message.chat.id, f"cleared {autofiltered} additional spam message{plural}")
 	finally:
 		for userid in toban:
-			await ban_user(context, message.chat.id, userid, message.sender_chat.id if message.sender_chat else None)
+			await ban_user(context, userid, message.sender_chat.id if message.sender_chat else None)
 		for msgid in todel:
 			try:
 				await context.bot.delete_message(message.chat.id, msgid)
@@ -187,13 +187,12 @@ async def kick_message(
 				# we couldn't delete this message; no biggie. There's lots of weird restrictions on what messages can be deleted.
 				print(f"couldn't delete message {userid}: {e.message}", file=stderr)
 
-async def ban_user(context: CallbackContext, chatid: int, userid: int, sender_chat: int | None) -> None:
-	pass # ban_chat_sender_chat
+async def ban_user(context: CallbackContext, userid: int, sender_chat: int | None) -> None:
 	bot: Bot = context.bot
 	if ischannel := (sender_chat is not None):
-		ban = bot.ban_chat_sender_chat(chatid, sender_chat)
+		ban = bot.ban_chat_sender_chat(CONFIG['private_chat_id'], sender_chat)
 	else:
-		ban = bot.ban_chat_member(chatid, userid)
+		ban = bot.ban_chat_member(CONFIG['private_chat_id'], userid)
 
 	try:
 		await ban
@@ -202,6 +201,15 @@ async def ban_user(context: CallbackContext, chatid: int, userid: int, sender_ch
 			f"couldn't ban {'channel' if ischannel else 'user'} {sender_chat if ischannel else userid} ({e.message})",
 			file=stderr
 		)
+
+async def check_user_against_scamlist(context: CallbackContext, users: Iterable[User], scamlist: list[int]) -> int:
+	c = 0
+	for user in users:
+		if user.id in scamlist:
+			await ban_user(context, CONFIG['private_chat_id'], None)
+			c += 1
+
+	return c
 
 class LBUser:
 	__slot__ = ('score', 'rank', 'userid')
