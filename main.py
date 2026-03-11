@@ -3,9 +3,9 @@ from math import floor, log10
 from datetime import datetime
 from collections.abc import Callable
 
-from telegram import Update
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ChatPermissions
 from telegram.constants import ParseMode
-from telegram.ext import Application, CallbackContext, CommandHandler, MessageHandler, filters
+from telegram.ext import Application, CallbackContext, CommandHandler, MessageHandler, filters, CallbackQueryHandler
 from telegram.error import TelegramError
 
 import database
@@ -47,6 +47,44 @@ def on_message(filters: filters.BaseFilter) -> Callable[[Callable], Callable]:
 		return func
 	return add_it
 
+async def captcha_callback(update: Update, _context: CallbackContext) -> None:
+    query = update.callback_query
+    if query is None or query.data is None or not query.data.startswith("captcha:"):
+        return
+
+    target_id = int(query.data.split(":")[1])
+    if query.from_user.id != target_id:
+        await query.answer("This captcha is not for you!", show_alert=True)
+        return
+
+    db.set_passed_captcha(target_id, True)
+
+    assert query.message is not None
+    await query.message.chat.restrict_member(
+        target_id,
+        permissions=ChatPermissions(
+            can_send_messages=True,
+            can_send_polls=False,
+            can_send_other_messages=False,
+            can_add_web_page_previews=True,
+            can_change_info=True,
+            can_invite_users=True,
+            can_pin_messages=False,
+            can_manage_topics=False,
+            can_send_audios=True,
+            can_send_documents=True,
+            can_send_photos=True,
+            can_send_videos=True,
+            can_send_video_notes=True,
+            can_send_voice_notes=True,
+        ),
+    )
+    await query.answer("Captcha passed! You can now speak.")
+    if query.message.is_accessible:
+	    await application.bot.delete_message(query.message.chat.id, query.message.message_id)
+
+application.add_handler(CallbackQueryHandler(captcha_callback))
+
 @on_command("ping")
 async def ping(update: Update, _context: CallbackContext) -> None:
 	assert update.message is not None
@@ -58,6 +96,25 @@ async def ping(update: Update, _context: CallbackContext) -> None:
 @filter_chat(private_chat_id, private_chat_username)
 async def new_chat_member(update: Update, _context: CallbackContext) -> None:
 	assert update.message is not None
+	chat = update.message.chat
+
+	for member in update.message.new_chat_members:
+		if member.is_bot:
+			continue
+
+		if not db.get_passed_captcha(member.id):
+			# Mute user
+			await chat.restrict_member(member.id, permissions=ChatPermissions(can_send_messages=False))
+
+			# Send individual captcha message
+			keyboard = [[InlineKeyboardButton("I am not a bot", callback_data=f"captcha:{member.id}")]]
+			reply_markup = InlineKeyboardMarkup(keyboard)
+			await update.message.reply_text(
+				f"Welcome {get_mention(member)}\\! To prevent spam, please complete this captcha to speak\\.",
+				reply_markup=reply_markup,
+				parse_mode=ParseMode.MARKDOWN_V2
+			)
+
 	handles = ", ".join(get_mention(member) for member in update.message.new_chat_members)
 	await update.message.reply_text(
 		f"""{handles},
@@ -275,7 +332,7 @@ async def votekick(update: Update, context: CallbackContext) -> None:
 			f'User {get_mention(tuser)} now has {votec}/{votes_required} votes against them\\.{appendix}',
 			parse_mode=ParseMode.MARKDOWN_V2
 		)
-		
+
 		if votec >= votes_required:
 			# don't remove the bot's final message
 			db.add_vk_messages(tuser.id, [update.message.message_id])

@@ -1,7 +1,7 @@
 import sqlite3
 from threading import RLock
 
-DB_SCHEME_VERSION = 3
+DB_SCHEME_VERSION = 4
 
 
 class UserDB:
@@ -18,7 +18,8 @@ class UserDB:
 							userid INTEGER PRIMARY KEY UNIQUE,
 							warncount INTEGER CHECK(warncount >= 0),
 							trusted INTEGER CHECK(trusted >= 0 AND trusted <= 1),
-							vkscore INTEGER CHECK(vkscore >= 0)
+							vkscore INTEGER CHECK(vkscore >= 0),
+							passed_captcha INTEGER DEFAULT 0 CHECK(passed_captcha >= 0 AND passed_captcha <= 1)
 						)''')
 		self.db.execute('''CREATE TABLE IF NOT EXISTS votekicks(
 							voter INTEGER,
@@ -42,14 +43,18 @@ class UserDB:
 			if user_version < 2:
 				print("upgrading DB to: v2")
 				self.db.execute('''ALTER TABLE users ADD COLUMN vkscore INTEGER DEFAULT 0 CHECK(vkscore >= 0)''')
+			if user_version < 4:
+				print("upgrading DB to: v4")
+				# existing users are marked as if they passed the captcha
+				self.db.execute('''ALTER TABLE users ADD COLUMN passed_captcha INTEGER DEFAULT 1 CHECK(passed_captcha >= 0 AND passed_captcha <= 1)''')
 
 		self.db.execute(f'''PRAGMA user_version = {DB_SCHEME_VERSION}''')
 
 		self.db.commit()
 
-	def create_user_row(self, userid: int, warncount: int = 0, trusted: bool = False):
+	def create_user_row(self, userid: int, warncount: int = 0, trusted: bool = False, passed_captcha: bool = False):
 		with self.mutex:
-			self.db.execute('''INSERT INTO users VALUES (?, ?, ?, 0)''', (userid, warncount, trusted))
+			self.db.execute('''INSERT INTO users VALUES (?, ?, ?, 0, ?)''', (userid, warncount, trusted, passed_captcha))
 			self.db.commit()
 
 	def ensure_user(self, userid: int):
@@ -90,6 +95,19 @@ class UserDB:
 		with self.mutex:
 			c = self.db.cursor()
 			c.execute('''SELECT trusted FROM users WHERE userid = ?''', (userid,))
+			return bool(c.fetchone()[0])
+
+	def set_passed_captcha(self, userid: int, passed: bool):
+		self.ensure_user(userid)
+		with self.mutex:
+			self.db.execute('''UPDATE users SET passed_captcha = ? WHERE userid = ?''', (passed, userid))
+			self.db.commit()
+
+	def get_passed_captcha(self, userid: int) -> bool:
+		self.ensure_user(userid)
+		with self.mutex:
+			c = self.db.cursor()
+			c.execute('''SELECT passed_captcha FROM users WHERE userid = ?''', (userid,))
 			return bool(c.fetchone()[0])
 
 	def add_vk_messages(self, bad_user: int, msg_ids: list[int]):
