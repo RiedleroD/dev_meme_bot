@@ -3,6 +3,7 @@ from sys import stderr
 from typing import Optional
 from collections.abc import Callable
 from hashlib import md5
+from url_normalize import url_normalize
 
 from telegram import Chat, Update, User, Message, Bot, MessageEntity
 from telegram.constants import ParseMode
@@ -182,7 +183,8 @@ def get_urls_from_message(message: Message) -> list[str]:
 			username = get_entity_string(message.text, entity)[1:]
 			user_link = f"https://t.me/{username}"
 			urls.append(user_link)
-	return urls
+
+	return [normalized for url in urls if (normalized := url_normalize(url)) is not None]
 
 def get_entity_string(message_text: str, entity: MessageEntity) -> str:
 	utf_16_message_bytes = message_text.encode('utf-16-le')
