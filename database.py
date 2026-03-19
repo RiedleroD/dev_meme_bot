@@ -1,7 +1,7 @@
 import sqlite3
 from threading import RLock
 
-DB_SCHEME_VERSION = 3
+DB_SCHEME_VERSION = 4
 
 
 class UserDB:
@@ -42,6 +42,9 @@ class UserDB:
 			if user_version < 2:
 				print("upgrading DB to: v2")
 				self.db.execute('''ALTER TABLE users ADD COLUMN vkscore INTEGER DEFAULT 0 CHECK(vkscore >= 0)''')
+			if user_version < 4:
+				print("Clearing badmessages table")
+				self.db.execute('''DELETE FROM badmessages''')
 
 		self.db.execute(f'''PRAGMA user_version = {DB_SCHEME_VERSION}''')
 

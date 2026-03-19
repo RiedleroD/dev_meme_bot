@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 from sys import stderr
-from typing import List, Optional, Tuple
+from typing import Optional
 from collections.abc import Callable
 from hashlib import md5
 
@@ -103,8 +103,8 @@ async def kick_message(
 	Removes a message, bans the user, and does all the necessary autofiltering stuff
 	'''
 	assert message.from_user is not None
-	users_to_ban = set([message.from_user.id])
-	messages_to_delete = set([message.id])
+	users_to_ban = {message.from_user.id}
+	messages_to_delete = {message.id}
 
 	# immediately delete any messages associated with this votekick to unclog chat
 	messages_to_delete.update(db.pop_vk_messages(message.from_user.id))
@@ -113,7 +113,7 @@ async def kick_message(
 	try:
 		if message.text is not None and len(message.text) >= CONFIG['spam_minlength']:
 			autofiltered = 0
-			message_links: List[str] = get_urls_from_message(message)
+			message_links: list[str] = get_urls_from_message(message)
 			for link in message_links:
 				link_hash = hashdigest(link)
 				link_badness = db.check_message_badness(link_hash)
@@ -125,7 +125,7 @@ async def kick_message(
 
 				# autofiltering stuff
 				if link_badness >= CONFIG['spam_threshhold']:
-					kept_links: List[Tuple[int, bytes, int]] = []
+					kept_links: list[tuple[int, bytes, int]] = []
 					for message_id, recent_link_hash, userid in recent_message_links:
 						if recent_link_hash == link_hash:
 							link_badness += 1
@@ -140,8 +140,8 @@ async def kick_message(
 			if autofiltered > 0:
 				plural = 's' if autofiltered >= 2 else ''
 				await context.bot.send_message(message.chat.id, f"cleared {autofiltered} additional spam message{plural}")
-			remove_from_recent_messages(*messages_to_delete)
 	finally:
+		remove_from_recent_messages(*messages_to_delete)
 		for userid in users_to_ban:
 			await ban_user(context, message.chat.id, userid, message.sender_chat)
 		for message_id in messages_to_delete:
@@ -166,20 +166,29 @@ async def ban_user(context: CallbackContext, chatid: int, userid: int, sender_ch
 	except TelegramError as e:
 		print(f"couldn't ban {'channel' if ischannel else 'user'} {banid} ({e.message})", file=stderr)
 
-def get_urls_from_message(message: Message) -> List[str]:
-	urls: List[str] = []
+def get_urls_from_message(message: Message) -> list[str]:
+	urls: list[str] = []
 	if not message.entities or not message.text:
 		return urls
-	utf_16_message_bytes = message.text.encode('utf-16-le')
 	for entity in message.entities:
 		if entity.type == MessageEntity.URL:
-			start_byte = entity.offset * 2
-			end_byte = start_byte + entity.length * 2
-			utf_16_link_bytes = utf_16_message_bytes[start_byte:end_byte]
-			urls.append(utf_16_link_bytes.decode('utf-16-le'))
+			urls.append(get_entity_string(message.text, entity))
 		if entity.type == MessageEntity.TEXT_LINK and entity.url is not None:
 			urls.append(entity.url)
+		if entity.type == MessageEntity.TEXT_MENTION and entity.user is not None:
+			user_link = f"tg://user?id={entity.user.id}"
+			urls.append(user_link)
+		if entity.type == MessageEntity.MENTION:
+			username = get_entity_string(message.text, entity)[1:]
+			user_link = f"https://t.me/{username}"
+			urls.append(user_link)
 	return urls
+
+def get_entity_string(message_text: str, entity: MessageEntity) -> str:
+	utf_16_message_bytes = message_text.encode('utf-16-le')
+	start_byte = entity.offset * 2
+	end_byte = start_byte + entity.length * 2
+	return utf_16_message_bytes[start_byte:end_byte].decode('utf-16-le')
 
 class LBUser:
 	__slot__ = ('score', 'rank', 'userid')

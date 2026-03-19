@@ -2,9 +2,8 @@
 from math import floor, log10
 from datetime import datetime
 from collections.abc import Callable
-from typing import List, Tuple
 
-from telegram import MessageEntity, Update
+from telegram import Update
 from telegram.constants import ParseMode
 from telegram.ext import Application, CallbackContext, CommandHandler, MessageHandler, filters
 from telegram.error import TelegramError
@@ -349,7 +348,7 @@ async def myrank(update: Update, context: CallbackContext) -> None:
 async def on_text_message(update: Update, context: CallbackContext) -> None:
 	if update.message is not None and update.message.text is not None:
 		assert update.message.from_user is not None
-		message_links: List[str] = get_urls_from_message(update.message)
+		message_links: list[str] = get_urls_from_message(update.message)
 		for link in message_links:
 			link_hash: bytes = hashdigest(link)
 			link_badness: int = db.check_message_badness(link_hash)
