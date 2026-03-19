@@ -184,7 +184,8 @@ def get_urls_from_message(message: Message) -> list[str]:
 			user_link = f"https://t.me/{username}"
 			urls.append(user_link)
 
-	return [normalized for url in urls if (normalized := url_normalize(url)) is not None]
+	normalized_urls = [norm.replace("http://", "https://", 1) if norm.startswith("http://") else norm for url in urls if (norm := url_normalize(url)) is not None]
+	return normalized_urls
 
 def get_entity_string(message_text: str, entity: MessageEntity) -> str:
 	utf_16_message_bytes = message_text.encode('utf-16-le')
