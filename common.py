@@ -3,7 +3,7 @@ from sys import stderr
 from typing import Optional
 from collections.abc import Callable
 from hashlib import md5
-from url_normalize import url_normalize
+from urllib.parse import urlparse, urlunparse
 
 from telegram import Chat, Update, User, Message, Bot, MessageEntity
 from telegram.constants import ParseMode
@@ -126,16 +126,12 @@ async def kick_message(
 
 				# autofiltering stuff
 				if link_badness >= CONFIG['spam_threshhold']:
-					kept_links: list[tuple[int, bytes, int]] = []
 					for message_id, recent_link_hash, userid in recent_message_links:
 						if recent_link_hash == link_hash:
 							link_badness += 1
 							messages_to_delete.add(message_id)
 							users_to_ban.add(userid)
 							autofiltered += 1
-						else:
-							kept_links.append((message_id, recent_link_hash, userid))
-					recent_message_links[:] = kept_links
 
 				db.set_message_badness(link_hash, link_badness)
 			if autofiltered > 0:
@@ -184,8 +180,17 @@ def get_urls_from_message(message: Message) -> list[str]:
 			user_link = f"https://t.me/{username}"
 			urls.append(user_link)
 
-	normalized_urls = [norm.replace("http://", "https://", 1) if norm.startswith("http://") else norm for url in urls if (norm := url_normalize(url)) is not None]
+	normalized_urls = [normalize_url(url) for url in urls if url]
 	return normalized_urls
+
+def normalize_url(url: str) -> str:
+	if not url:
+		return url
+	parsed = urlparse(url)
+	if parsed.scheme == '' or parsed.scheme == "http":
+		parsed = parsed._replace(scheme='https')
+	parsed = parsed._replace(netloc=parsed.netloc.lower())
+	return urlunparse(parsed)
 
 def get_entity_string(message_text: str, entity: MessageEntity) -> str:
 	utf_16_message_bytes = message_text.encode('utf-16-le')
