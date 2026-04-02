@@ -10,7 +10,7 @@ from telegram.error import TelegramError
 
 import database
 from config import CONFIG
-from common import escape_md, hashdigest, get_mention, filter_chat, is_admin, get_reply_target, \
+from common import escape_md, get_urls_from_message, hashdigest, get_mention, filter_chat, is_admin, get_reply_target, \
 	check_admin_to_user_action, kick_message, Leaderboard
 import common
 
@@ -275,7 +275,7 @@ async def votekick(update: Update, context: CallbackContext) -> None:
 			f'User {get_mention(tuser)} now has {votec}/{votes_required} votes against them\\.{appendix}',
 			parse_mode=ParseMode.MARKDOWN_V2
 		)
-		
+
 		if votec >= votes_required:
 			# don't remove the bot's final message
 			db.add_vk_messages(tuser.id, [update.message.message_id])
@@ -348,18 +348,21 @@ async def myrank(update: Update, context: CallbackContext) -> None:
 async def on_text_message(update: Update, context: CallbackContext) -> None:
 	if update.message is not None and update.message.text is not None:
 		assert update.message.from_user is not None
-		thishash = hashdigest(update.message.text)
-		badness = db.check_message_badness(thishash)
-		if badness >= CONFIG['spam_threshhold']:
-			await kick_message(update.message, context, db)
-		else:
-			common.recent_messages.append((
-				update.message.id,
-				thishash,
-				update.message.from_user.id
-			))
-			if len(common.recent_messages) > CONFIG['message_memory']:
-				common.recent_messages = common.recent_messages[-CONFIG['message_memory']:]
+		message_links: list[str] = get_urls_from_message(update.message)
+		for link in message_links:
+			link_hash: bytes = hashdigest(link)
+			link_badness: int = db.check_message_badness(link_hash)
+			if link_badness >= CONFIG['spam_threshhold']:
+				await kick_message(update.message, context, db)
+				break
+			else:
+				common.recent_message_links.append((
+					update.message.id,
+					link_hash,
+					update.message.from_user.id
+				))
+				if len(common.recent_message_links) > CONFIG['message_memory']:
+					common.recent_message_links = common.recent_message_links[-CONFIG['message_memory']:]
 
 print("starting polling")
 application.run_polling()
