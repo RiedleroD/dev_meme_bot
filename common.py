@@ -16,19 +16,19 @@ from telegram.error import BadRequest, TelegramError
 import database
 from config import CONFIG
 
-recent_message_links: list[tuple[int, bytes, Bannable]] = [] # message_id, link_hash, user
-recent_message_users: list[BannableWithHandle] = []
+recent_message_links: list[tuple[int, bytes, 'Bannable']] = [] # message_id, link_hash, user
+recent_message_users: list['BannableWithHandle'] = []
 join_messages: list[tuple[int, 'BannableWithObj']] = [] # message_id, user
 
 @dataclass
-class Bannable[T](ABC):
+class Bannable(ABC):
 	__slots__ = ('id', '_obj', 'handle')
 	id: int
-	_obj: T | None
+	_obj: User | Chat | ChatFullInfo | None
 	handle: str | None
 
 	@abstractmethod
-	async def get_obj(self, bot: Bot) -> T:
+	async def get_obj(self, bot: Bot) -> User | Chat | ChatFullInfo:
 		...
 
 	@abstractmethod
@@ -41,8 +41,9 @@ class BannableWithHandle(Bannable, ABC):
 	handle: str
 
 @dataclass
-class BannableChat(Bannable[Chat | ChatFullInfo]):
+class BannableChat(Bannable):
 	__slots__ = ()
+	_obj: Chat | ChatFullInfo | None
 
 	async def get_obj(self, bot: Bot) -> Chat | ChatFullInfo:
 		if self._obj is None:
@@ -58,6 +59,7 @@ class BannableChat(Bannable[Chat | ChatFullInfo]):
 
 @dataclass
 class BannableChatWithObj(BannableChat, BannableWithHandle):
+	__slots__ = ()
 	_obj: Chat | ChatFullInfo
 
 	@classmethod
@@ -73,8 +75,9 @@ class BannableChatWithObj(BannableChat, BannableWithHandle):
 		return f"BannableChat(@{self.handle})"
 
 @dataclass
-class BannableUser(Bannable[User]):
+class BannableUser(Bannable):
 	__slots__ = ()
+	_obj: User | None
 
 	async def get_obj(self, bot: Bot) -> User:
 		if self._obj is None:
