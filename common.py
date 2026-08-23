@@ -139,6 +139,11 @@ async def kick_message(
 	users_to_ban = {message.from_user.id}
 	messages_to_delete = {message.id}
 
+	# ban additional associated users
+	# NOTE: possibly to consider in the future: message.sender_business_bot
+	for attrname in ('guest_bot_caller_user', 'guest_bot_caller_chat'):
+		if (maybeuser := getattr(message, attrname)) is not None:
+			users_to_ban.add(maybeuser)
 	# immediately delete any messages associated with this votekick to unclog chat
 	messages_to_delete.update(db.pop_vk_messages(message.from_user.id))
 	# get rid of deleted messages in memory so we can remember more potentially important messages
