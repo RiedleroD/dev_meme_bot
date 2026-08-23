@@ -41,4 +41,4 @@ replace relevant paths and the user in `riedlersdevbot.rcservice` and drop the f
 
 The bot will greet new users with a welcome message when they join (TODO: make configurable)
 
-It remembers the contents of messages that were subject to votekicks. If two votekicked messages had identical text content, other messages with that content will automatically be removed. For this, the bot looks through the last 100 messages it saw, as well as all future ones.
+It remembers what hyperlinks are associated with votekicks and looks through the last 100 messages, as well as all future ones, when it decides that a link is spam.
