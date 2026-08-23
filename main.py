@@ -3,7 +3,7 @@ from math import floor, log10
 from datetime import datetime
 from collections.abc import Callable
 
-from telegram import Update, Bot
+from telegram import Update, Bot, User, Chat, Message, MessageOriginUser, MessageOriginChat, MessageOriginChannel
 from telegram.constants import ParseMode
 from telegram.ext import Application, CallbackContext, CommandHandler, MessageHandler, filters
 from telegram.error import TelegramError
@@ -11,11 +11,12 @@ from telegram.error import TelegramError
 import database
 from config import CONFIG
 from common import escape_md, get_urls_from_message, hashdigest, get_mention, filter_chat, is_admin, get_reply_target, \
-	check_admin_to_user_action, kick_message, Leaderboard
+	check_admin_to_user_action, kick_message, ban_user, Leaderboard, \
+	BannableChat, BannableChatWithObj, BannableUserWithObj, BannableUserWithBoth, BannableWithObj
 import common
 
-private_chat_id = CONFIG['private_chat_id']
-private_chat_username = CONFIG['private_chat_username']
+private_chat_id: int = CONFIG['private_chat_id']
+private_chat_username: str = CONFIG['private_chat_username']
 
 print('loading/creating database')
 db = database.UserDB(CONFIG['database_path'])
@@ -36,7 +37,7 @@ async def check_sneaky_bitches(context: CallbackContext) -> None:
 	toban = []
 
 	bot: Bot = context.bot # needed because my LSP doesn't see the type of context.bot otherwise
-	for i, (msgid, usrid, chatid) in enumerate(common.join_messages):
+	for i, (msgid, bannable) in enumerate(common.join_messages):
 		# checks whether message exists
 		success = await bot.set_message_reaction(private_chat_id, msgid, None)
 		if not success:
@@ -45,8 +46,8 @@ async def check_sneaky_bitches(context: CallbackContext) -> None:
 	print(f"banning {len(toban)} sneaky bitches out of {len(common.join_messages)}")
 
 	for i in reversed(toban):
-		msgid, userid, chatid = common.join_messages.pop(i)
-		await common.ban_user(context, private_chat_id, usrid, chatid)
+		msgid, bannable = common.join_messages.pop(i)
+		await common.ban_user(context, private_chat_id, bannable)
 
 	if len(toban) > 0:
 		await bot.send_message(private_chat_id, f"banned {len(toban)} sneaky bitches")
@@ -80,8 +81,11 @@ async def ping(update: Update, _context: CallbackContext) -> None:
 
 @on_message(filters.StatusUpdate.NEW_CHAT_MEMBERS)
 @filter_chat(private_chat_id, private_chat_username)
-async def new_chat_member(update: Update, _context: CallbackContext) -> None:
+async def new_chat_member(update: Update, context: CallbackContext) -> None:
+	await on_any_message(update, context)
+	await on_text_message(update, context)
 	assert update.message is not None
+	# TODO: check for pfps
 	handles = ", ".join(get_mention(member) for member in update.message.new_chat_members)
 	await update.message.reply_text(
 		f"""{handles},
@@ -103,7 +107,6 @@ async def spamkick(update: Update, context: CallbackContext) -> None:
 	target = await check_admin_to_user_action(update.message, 'spamkick', usable_on_bots=True)
 	if target is None:
 		return
-	assert update.message.reply_to_message is not None
 
 	for voterid in db.get_votekicks(target.id):
 		if voterid != update.message.from_user.id:
@@ -111,11 +114,14 @@ async def spamkick(update: Update, context: CallbackContext) -> None:
 
 	db.increment_vkscore(update.message.from_user.id)
 
-	await kick_message(update.message.reply_to_message, context, db, mark_as_spam=True)
+	if update.message.reply_to_message is not None:
+		await kick_message(update.message.reply_to_message, context, db, mark_as_spam=True)
+	else:
+		await ban_user(context, update.message.chat.id, bannable=target, del_messages=True)
 
 @on_command("warn")
 @filter_chat(private_chat_id, private_chat_username)
-async def warn_member(update: Update, _context: CallbackContext) -> None:
+async def warn_member(update: Update, context: CallbackContext) -> None:
 	assert update.message is not None
 	target = await check_admin_to_user_action(update.message, 'warn')
 	if target is None:
@@ -124,14 +130,14 @@ async def warn_member(update: Update, _context: CallbackContext) -> None:
 	warns = db.get_warns(target.id) + 1
 	db.set_warns(target.id, warns)
 	await update.message.chat.send_message(
-		f'*{get_mention(target)}* recieved a warn\\! Now they have {warns} warns',
+		f'*{get_mention(await target.with_obj(context.bot))}* recieved a warn\\! Now they have {warns} warns',
 		parse_mode=ParseMode.MARKDOWN_V2
 	)
 
 
 @on_command("unwarn")
 @filter_chat(private_chat_id, private_chat_username)
-async def unwarn_member(update: Update, _context: CallbackContext) -> None:
+async def unwarn_member(update: Update, context: CallbackContext) -> None:
 	assert update.message is not None
 	target = await check_admin_to_user_action(update.message, 'unwarn')
 	if target is None:
@@ -141,7 +147,7 @@ async def unwarn_member(update: Update, _context: CallbackContext) -> None:
 	if warns > 0:
 		warns -= 1
 	db.set_warns(target.id, warns)
-	reply = f'*{get_mention(target)}* has been a good hooman\\! '
+	reply = f'*{get_mention(await target.with_obj(context.bot))}* has been a good hooman\\! '
 	if warns == 0:
 		reply += 'Now they don\'t have any warns'
 	else:
@@ -151,7 +157,7 @@ async def unwarn_member(update: Update, _context: CallbackContext) -> None:
 
 @on_command("clearwarns")
 @filter_chat(private_chat_id, private_chat_username)
-async def clear_member_warns(update: Update, _context: CallbackContext) -> None:
+async def clear_member_warns(update: Update, context: CallbackContext) -> None:
 	assert update.message is not None
 	target = await check_admin_to_user_action(update.message, 'clearwarns')
 	if target is None:
@@ -159,14 +165,14 @@ async def clear_member_warns(update: Update, _context: CallbackContext) -> None:
 
 	db.set_warns(target.id, 0)
 	await update.message.chat.send_message(
-		f"*{get_mention(target)}*'s warns were cleared",
+		f"*{get_mention(await target.with_obj(context.bot))}*'s warns were cleared",
 		parse_mode=ParseMode.MARKDOWN_V2
 	)
 
 
 @on_command("warns")
 @filter_chat(private_chat_id, private_chat_username)
-async def get_member_warns(update: Update, _context: CallbackContext) -> None:
+async def get_member_warns(update: Update, context: CallbackContext) -> None:
 	assert update.message is not None
 	assert update.message.from_user is not None
 	target = await get_reply_target(update.message)
@@ -180,6 +186,7 @@ async def get_member_warns(update: Update, _context: CallbackContext) -> None:
 		)
 		return
 	warns = db.get_warns(tuser.id)
+	tuser = await tuser.with_obj(context.bot)
 	if tuser.is_bot and tmsg.sender_chat is None:
 		await update.message.reply_text("Bots don't have warns", parse_mode=ParseMode.MARKDOWN_V2)
 		return
@@ -192,13 +199,14 @@ async def get_member_warns(update: Update, _context: CallbackContext) -> None:
 
 @on_command("trust")
 @filter_chat(private_chat_id, private_chat_username)
-async def add_trusted_user(update: Update, _context: CallbackContext) -> None:
+async def add_trusted_user(update: Update, context: CallbackContext) -> None:
 	assert update.message is not None
 	target = await check_admin_to_user_action(update.message, 'trust')
 	if target is None:
 		return
 
 	trusted = db.get_trusted(target.id)
+	target = await target.with_obj(context.bot)
 	if trusted:
 		await update.message.chat.send_message(
 			f'*{get_mention(target)}* is already trusted, silly',
@@ -220,13 +228,14 @@ async def add_trusted_user(update: Update, _context: CallbackContext) -> None:
 
 @on_command("untrust")
 @filter_chat(private_chat_id, private_chat_username)
-async def del_trusted_user(update: Update, _context: CallbackContext) -> None:
+async def del_trusted_user(update: Update, context: CallbackContext) -> None:
 	assert update.message is not None
 	target = await check_admin_to_user_action(update.message, 'untrust')
 	if target is None:
 		return
 
 	trusted = db.get_trusted(target.id)
+	target = await target.with_obj(context.bot)
 	if not trusted:
 		await update.message.chat.send_message(
 			f'*{get_mention(target)}* wasn\'t trusted in the first place',
@@ -252,18 +261,17 @@ async def del_trusted_user(update: Update, _context: CallbackContext) -> None:
 async def votekick(update: Update, context: CallbackContext) -> None:
 	assert update.message is not None
 
-	target = await get_reply_target(update.message, 'votekick')
+	target = await get_reply_target(update.message, 'votekick', allow_ment=True)
 	if target is None:
 		return
-
-	assert update.message.reply_to_message is not None
-
 	tuser, tmsg = target
 	voter = update.message.from_user
 	chat = update.message.chat
 
 	assert voter is not None
 	assert chat is not None
+
+	is_chat = isinstance(tuser, BannableChat)
 
 	if tuser.id == 777000:
 		if (db.get_trusted(voter.id) or await is_admin(chat, voter)):
@@ -278,25 +286,27 @@ async def votekick(update: Update, context: CallbackContext) -> None:
 			'Only trusted users can votekick someone',
 			parse_mode=ParseMode.MARKDOWN_V2
 		)
-	elif db.get_trusted(tuser.id):
+	elif db.get_trusted(tuser.id) and not is_chat:
 		await update.message.reply_text(
-			'You can\'t votekick another trusted user',
+			f"You can\'t votekick another trusted user \"{escape_md(repr(tuser))}\"",
 			parse_mode=ParseMode.MARKDOWN_V2
 		)
-	elif await is_admin(chat, tuser):
+	elif (not is_chat) and (await is_admin(chat, tuser)):
 		await update.message.reply_text(
 			'You can\'t votekick an admin',
 			parse_mode=ParseMode.MARKDOWN_V2
 		)
 	else:
 		votes_required = CONFIG['votes_required']
+		tuser = await tuser.with_obj(context.bot)
 
 		db.add_votekick(voter.id, tuser.id)
 		votes = db.get_votekicks(tuser.id)
 		votec = len(votes)
 		appendix = "\nthat constitutes a ban\\!" if votec >= votes_required else ""
+		pronoun = 'Channel' if is_chat else 'User'
 		reply = await update.message.reply_text(
-			f'User {get_mention(tuser)} now has {votec}/{votes_required} votes against them\\.{appendix}',
+			f'{pronoun} {get_mention(tuser)} now has {votec}/{votes_required} votes against them\\.{appendix}',
 			parse_mode=ParseMode.MARKDOWN_V2
 		)
 
@@ -304,7 +314,8 @@ async def votekick(update: Update, context: CallbackContext) -> None:
 			# don't remove the bot's final message
 			db.add_vk_messages(tuser.id, [update.message.message_id])
 
-			await kick_message(update.message.reply_to_message, context, db)
+			if tmsg is not None:
+				await kick_message(tmsg, context, db)
 
 			# award score to all eligible users
 			for userid in votes:
@@ -368,8 +379,11 @@ async def myrank(update: Update, context: CallbackContext) -> None:
 		text = f"You're rank {user.rank} with {user.score} successful votekicks"
 	await update.message.reply_text(text, ParseMode.MARKDOWN_V2)
 
+
 @on_message(filters.TEXT)
+@filter_chat(private_chat_id, private_chat_username)
 async def on_text_message(update: Update, context: CallbackContext) -> None:
+	await on_any_message(update, context)
 	if update.message is not None and update.message.text is not None:
 		assert update.message.from_user is not None
 		message_links: list[str] = get_urls_from_message(update.message)
@@ -387,12 +401,78 @@ async def on_text_message(update: Update, context: CallbackContext) -> None:
 					if not len(application.job_queue.get_jobs_by_name(check_sneaky_bitches.__name__)) > 0:
 						application.job_queue.run_once(check_sneaky_bitches, 10)
 			else:
+				target: BannableWithObj
+				if update.message.sender_chat is not None:
+					target = BannableChatWithObj.from_chat(update.message.sender_chat)
+				else:
+					target = BannableUserWithObj.from_user(update.message.from_user)
 				common.recent_message_links.append((
 					update.message.id,
 					link_hash,
-					update.message.from_user.id
+					target,
 				))
 			common.trunc_msgmem(common.recent_message_links)
+
+
+@on_message(filters.ALL)
+@filter_chat(private_chat_id, private_chat_username)
+async def on_any_message(update: Update, context: CallbackContext) -> None:
+	# remembering users we've come across
+	users_to_search: list[BannableUserWithBoth | BannableChatWithObj] = []
+
+	def add_tuser(tuser: User | None) -> None:
+		if tuser is not None and tuser.username is not None:
+			users_to_search.append(BannableUserWithBoth.from_user(tuser))
+
+	def add_tchat(tchat: Chat | None) -> None:
+		if tchat is not None and tchat.username is not None:
+			users_to_search.append(BannableChatWithObj.from_chat(tchat))
+
+	def add_tmessage(tmessage: Message | None) -> None:
+		if tmessage is not None:
+			if tmessage.sender_chat is not None:
+				add_tchat(tmessage.sender_chat)
+			else:
+				add_tuser(tmessage.from_user)
+			add_tuser(tmessage.via_bot)
+			add_tuser(tmessage.sender_business_bot)
+			add_tuser(tmessage.guest_bot_caller_user)
+			add_tchat(tmessage.guest_bot_caller_chat)
+			if tmessage.new_chat_members is not None:
+				for member in tmessage.new_chat_members:
+					add_tuser(member)
+			if tmessage.forward_origin is not None:
+				if isinstance(tmessage.forward_origin, MessageOriginUser):
+					add_tuser(tmessage.forward_origin.sender_user)
+				if isinstance(tmessage.forward_origin, MessageOriginChat):
+					add_tchat(tmessage.forward_origin.sender_chat)
+				if isinstance(tmessage.forward_origin, MessageOriginChannel):
+					add_tchat(tmessage.forward_origin.chat)
+			if tmessage.reply_to_story is not None:
+				add_tchat(tmessage.reply_to_story.chat)
+			add_tmessage(tmessage.reply_to_message)
+			if tmessage.pinned_message is not None and isinstance(tmessage.pinned_message, Message):
+				add_tmessage(tmessage.pinned_message)
+
+	add_tmessage(update.message)
+	add_tmessage(update.edited_message)
+
+	for search_bannable in users_to_search:
+		found = False
+		for i, bannable in enumerate(common.recent_message_users):
+			if bannable.handle == search_bannable.handle:
+				found = True
+				if search_bannable.id == bannable.id:
+					break # no problemo. already in memory
+				else:
+					# uh oh! it's someone else now. wtf? replace entry
+					common.recent_message_users[i] = search_bannable
+					break
+		if not found:
+			print(f"saw new user: {search_bannable.id} => {search_bannable.handle}")
+			common.recent_message_users.append(search_bannable)
+
+		common.trunc_msgmem(common.recent_message_users)
 
 print("starting polling")
 application.run_polling()

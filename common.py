@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
 from sys import stderr
-from typing import Optional
+from typing import Literal, overload, Optional, Sequence, Self
 from collections.abc import Callable
 from hashlib import md5
 from urllib.parse import urlparse, urlunparse
+from abc import ABC, abstractmethod
+from dataclasses import dataclass
 
-from telegram import Chat, Update, User, Message, Bot, MessageEntity
+from telegram import Chat, ChatFullInfo, Update, User, Message, Bot, MessageEntity
 from telegram.constants import ParseMode
 from telegram.helpers import escape_markdown
 from telegram.ext import CallbackContext
@@ -14,8 +16,107 @@ from telegram.error import BadRequest, TelegramError
 import database
 from config import CONFIG
 
-recent_message_links: list[tuple[int, bytes, int]] = [] # message_id, link_hash, userid
-join_messages: list[tuple[int, int, int | None]] = [] # msgid, userid, chatid
+recent_message_links: list[tuple[int, bytes, Bannable]] = [] # message_id, link_hash, user
+recent_message_users: list[BannableWithHandle] = []
+join_messages: list[tuple[int, 'BannableWithObj']] = [] # message_id, user
+
+@dataclass
+class Bannable[T](ABC):
+	__slots__ = ('id', '_obj', 'handle')
+	id: int
+	_obj: T | None
+	handle: str | None
+
+	@abstractmethod
+	async def get_obj(self, bot: Bot) -> T:
+		...
+
+	@abstractmethod
+	async def with_obj(self, bot: Bot) -> 'BannableWithObj':
+		...
+
+@dataclass
+class BannableWithHandle(Bannable, ABC):
+	__slots__ = ()
+	handle: str
+
+@dataclass
+class BannableChat(Bannable[Chat | ChatFullInfo]):
+	__slots__ = ()
+
+	async def get_obj(self, bot: Bot) -> Chat | ChatFullInfo:
+		if self._obj is None:
+			self._obj = await bot.get_chat(self.id)
+		return self._obj
+
+	async def with_obj(self, bot: Bot) -> 'BannableChatWithObj':
+		return BannableChatWithObj.from_chat(await self.get_obj(bot))
+
+	@property
+	def is_bot(self) -> bool:
+		return False
+
+@dataclass
+class BannableChatWithObj(BannableChat, BannableWithHandle):
+	_obj: Chat | ChatFullInfo
+
+	@classmethod
+	def from_chat(cls, obj: Chat | ChatFullInfo) -> Self:
+		assert obj.username is not None  # guaranteed
+		return cls(id=obj.id, handle=obj.username.lower(), _obj=obj)
+
+	@property
+	def full_name(self) -> str:
+		return self._obj.full_name or f"@{self.handle}"
+
+	def __repr__(self) -> str:
+		return f"BannableChat(@{self.handle})"
+
+@dataclass
+class BannableUser(Bannable[User]):
+	__slots__ = ()
+
+	async def get_obj(self, bot: Bot) -> User:
+		if self._obj is None:
+			self._obj = (await bot.get_chat_member(CONFIG['private_chat_id'], self.id)).user
+		return self._obj
+
+	async def with_obj(self, bot: Bot) -> 'BannableUserWithObj':
+		return BannableUserWithObj.from_user(await self.get_obj(bot))
+
+@dataclass
+class BannableUserWithObj(BannableUser):
+	__slots__ = ()
+	_obj: User
+
+	@classmethod
+	def from_user(cls, obj: User) -> Self:
+		handle = obj.username
+		if handle is not None:
+			handle = handle.lower()
+		return cls(id=obj.id, handle=handle, _obj=obj)
+
+	@property
+	def is_bot(self) -> bool:
+		return self._obj.is_bot
+
+	@property
+	def full_name(self) -> str:
+		return self._obj.full_name
+
+	def __repr__(self) -> str:
+		if self.handle is not None:
+			return f"BannableUser(@{self.handle})"
+		else:
+			return f"BannableUser({self._obj.full_name})"
+
+@dataclass
+class BannableUserWithBoth(BannableUserWithObj, BannableWithHandle):
+	__slots__ = ()
+
+
+type BannableWithObj = BannableUserWithObj | BannableChatWithObj
+
 
 def trunc_msgmem(l: list) -> None:
 	while len(l) > CONFIG['message_memory']:
@@ -36,23 +137,31 @@ async def register_joinmsg(msg: Message) -> None:
 		)
 		return
 
+	user: Bannable
 	if msg.sender_chat is not None:
-		chatid = msg.sender_chat.id
+		user = BannableChatWithObj.from_chat(msg.sender_chat)
 	else:
-		chatid = None
+		user = BannableUserWithObj.from_user(msg.from_user)
 
 	join_messages.append((
 		msg.id,
-		msg.from_user.id,
-		chatid,
+		user,
 	))
 	trunc_msgmem(join_messages)
 
 def escape_md(txt: str) -> str:
 	return escape_markdown(txt, 2)
 
-def get_mention(user: User) -> str:
-	return user.mention_markdown_v2()
+def get_mention(user: User | BannableWithObj) -> str:
+	if isinstance(user, Bannable):
+		if isinstance(user, BannableUser):
+			return user._obj.mention_markdown_v2()
+		elif isinstance(user, BannableChat):
+			return user._obj.mention_markdown_v2()
+		else:
+			raise NotImplementedError("unreachable")
+	else:
+		return user.mention_markdown_v2()
 
 def hashdigest(text: str) -> bytes:
 	return md5(text.encode('utf-8')).digest()
@@ -79,32 +188,128 @@ If you want to use this bot outside that group, please contact the developer: \
 		return wrapper
 	return decorator
 
-async def is_admin(chat: Chat, user: User) -> bool:
+async def is_admin(chat: Chat, user: Bannable | User) -> bool:
 	# might wanna cache admins
-	member = await chat.get_member(user.id)
-	return member.status in ('creator', 'administrator')
+	if isinstance(user, BannableUser) or isinstance(user, User):
+		member = await chat.get_member(user.id)
+		return member.status in ('creator', 'administrator')
+
+	return False
 
 
-async def get_reply_target(message: Message, sendback: Optional[str] = None) -> tuple[User, Message] | None:
+@overload
+async def get_ments_from_msg(
+	message: Message,
+	allow_mult: Literal[True],
+	sendback: str | None = None,
+) -> Sequence[Bannable]:
+	...
+
+@overload
+async def get_ments_from_msg(
+	message: Message,
+	allow_mult: Literal[False],
+	sendback: str | None = None,
+) -> Bannable | None:
+	...
+
+async def get_ments_from_msg(
+	message: Message,
+	allow_mult: bool,
+	sendback: str | None = None,
+) -> Bannable | Sequence[Bannable] | None:
+	tusers: list[Bannable] = []
+	for entity in message.entities:
+		if entity.type == MessageEntity.TEXT_MENTION:
+			assert entity.user is not None # should be guaranteed
+			tusers.append(BannableUserWithObj.from_user(entity.user))
+		elif entity.type == MessageEntity.MENTION:
+			assert message.text is not None
+			search_handle = get_entity_string(message.text, entity)[1:].lower()
+			print(f"what is this username? {search_handle}")
+			found = False
+			for bannable in recent_message_users:
+				if bannable.handle == search_handle:
+					print(f"found! it's {bannable.id}")
+					tusers.append(bannable)
+					found = True
+					break
+			if not found:
+				await message.reply_text(
+					f'hmm … could not find user @{search_handle}\\. Try targetting via reply instead\\.',
+					parse_mode=ParseMode.MARKDOWN_V2
+				)
+	if allow_mult:
+		return tusers
+	elif len(tusers) > 1:
+		if sendback is not None:
+			await message.reply_text(
+				f'The command /{sendback} only allows targeting ONE user at once. this may change in the future',
+				parse_mode=ParseMode.MARKDOWN_V2
+			)
+		return None
+	elif len(tusers) > 0:
+		return tusers[0]
+	else:
+		return None
+
+@overload
+async def get_reply_target(
+	message: Message,
+	sendback: str | None,
+	allow_ment: Literal[True]
+) -> tuple[Bannable, Message | None] | None:
+	...
+
+@overload
+async def get_reply_target(
+	message: Message,
+	sendback: str | None = None,
+	allow_ment: Literal[False] = False
+) -> tuple[Bannable, Message] | None:
+	...
+
+async def get_reply_target(
+	message: Message,
+	sendback: str | None = None,
+	allow_ment: bool = False,
+) -> tuple[Bannable, Message | None] | None:
 	'''
-	Returns the user that is supposed to be warned. It might be a bot.
-	Returns None if no warn target.
+	Returns the user and message that is supposed to be targeted. It might be a bot.
+	May return None if no target could be identified.
+
+	:allow_ment: whether to allow looking through user mentions to find a target user. only allows one target for now
 	'''
 	if message.reply_to_message is not None:
 		if message.reply_to_message.from_user is None:
 			await message.reply_text("somehow we couldn't get the user of the replied message…")
 			return None
 		else:
-			return (message.reply_to_message.from_user, message.reply_to_message)
+			if message.reply_to_message.sender_chat is not None:
+				return (BannableChatWithObj.from_chat(message.reply_to_message.sender_chat), message.reply_to_message)
+			else:
+				return (BannableUserWithObj.from_user(message.reply_to_message.from_user), message.reply_to_message)
+	elif allow_ment:
+		# if the message isn't a reply, try finding mentions in the message
+		tuser = await get_ments_from_msg(message, False, sendback)
+		if tuser is not None:
+			return (tuser, None)
+
 	if sendback is not None:
+		desc = 'reply to a message' if not allow_ment else 'reply to a message or tag a user'
 		await message.reply_text(
-			f'The command /{sendback} only works when replying to someone',
+			f'The command /{sendback} needs a target \\({desc}\\)',
 			parse_mode=ParseMode.MARKDOWN_V2
 		)
+
 	return None
 
 
-async def check_admin_to_user_action(message: Message, command: str, usable_on_bots: bool = False) -> Optional[User]:
+async def check_admin_to_user_action(
+	message: Message,
+	command: str,
+	usable_on_bots: bool = False
+) -> Optional[Bannable]:
 	'''
 	It sends message if admin to user action is not possible and returns None
 	Returns user if it's possible.
@@ -114,11 +319,12 @@ async def check_admin_to_user_action(message: Message, command: str, usable_on_b
 	if not await is_admin(message.chat, message.from_user):
 		await message.reply_text('You are not an admin', parse_mode=ParseMode.MARKDOWN_V2)
 		return None
-	target = await get_reply_target(message, command)
+	target = await get_reply_target(message, command, True)
 	if target is None:
 		return None
 	tuser, tmsg = target
-	if (not usable_on_bots) and tuser.is_bot and tmsg.sender_chat is None:
+	if (not usable_on_bots) and (await tuser.get_obj(message.get_bot())).is_bot \
+		and (tmsg is None or tmsg.sender_chat is None):
 		await message.reply_text(f'/{command} isn\'t usable on bots', parse_mode=ParseMode.MARKDOWN_V2)
 		return None
 	return tuser
@@ -135,17 +341,33 @@ async def kick_message(
 	'''
 	Removes a message, bans the user, and does all the necessary autofiltering stuff
 	'''
-	assert message.from_user is not None
-	users_to_ban = {message.from_user.id}
+	users_to_ban: set[int] = set()
+	chats_to_ban: set[int] = set()
 	messages_to_delete = {message.id}
 
-	# ban additional associated users
+	# ban all easily associated users
 	# NOTE: possibly to consider in the future: message.sender_business_bot
-	for attrname in ('guest_bot_caller_user', 'guest_bot_caller_chat'):
+	associd: int
+	if message.sender_chat is not None:
+		associd = message.sender_chat.id
+		chats_to_ban.add(message.sender_chat.id)
+	elif message.from_user is not None:
+		associd = message.from_user.id
+		users_to_ban.add(message.from_user.id)
+	else:
+		raise Exception("could not associate kicked message with any user or channel-user")
+
+	for attrname in ('guest_bot_caller_user', 'guest_bot_caller_user', 'guest_bot_caller_chat', 'guest_bot_caller_chat'):
+		maybeuser: User | Chat | None
 		if (maybeuser := getattr(message, attrname)) is not None:
-			users_to_ban.add(maybeuser)
+			if isinstance(maybeuser, User):
+				users_to_ban.add(maybeuser.id)
+			elif isinstance(maybeuser, Chat):
+				chats_to_ban.add(maybeuser.id)
+			else:
+				... # unreachable
 	# immediately delete any messages associated with this votekick to unclog chat
-	messages_to_delete.update(db.pop_vk_messages(message.from_user.id))
+	messages_to_delete.update(db.pop_vk_messages(associd))
 	# get rid of deleted messages in memory so we can remember more potentially important messages
 	remove_from_recent_messages(*messages_to_delete)
 	try:
@@ -163,11 +385,14 @@ async def kick_message(
 
 				# autofiltering stuff
 				if link_badness >= CONFIG['spam_threshhold']:
-					for message_id, recent_link_hash, userid in recent_message_links:
+					for message_id, recent_link_hash, bannable in recent_message_links:
 						if recent_link_hash == link_hash:
 							link_badness += 1
 							messages_to_delete.add(message_id)
-							users_to_ban.add(userid)
+							if isinstance(bannable, BannableChat):
+								chats_to_ban.add(bannable.id)
+							else:
+								users_to_ban.add(bannable.id)
 							autofiltered += 1
 
 				db.set_message_badness(link_hash, link_badness)
@@ -176,7 +401,9 @@ async def kick_message(
 				await context.bot.send_message(message.chat.id, f"cleared {autofiltered} additional spam message{plural}")
 	finally:
 		for userid in users_to_ban:
-			await ban_user(context, message.chat.id, userid, message.sender_chat.id if message.sender_chat else None)
+			await ban_user(context, message.chat.id, BannableUser(userid, None, None))
+		for chatid in chats_to_ban:
+			await ban_user(context, message.chat.id, BannableChat(chatid, None, None))
 		for message_id in messages_to_delete:
 			try:
 				await context.bot.delete_message(message.chat.id, message_id)
@@ -184,19 +411,23 @@ async def kick_message(
 				# we couldn't delete this message; no biggie. There's lots of weird restrictions on what messages can be deleted.
 				print(f"couldn't delete message {message_id}: {e.message}", file=stderr)
 
-async def ban_user(context: CallbackContext, chatid: int, userid: int, sender_chat: int | None) -> None:
-	pass # ban_chat_sender_chat
+async def ban_user(
+	context: CallbackContext,
+	chatid: int,
+	bannable: Bannable,
+	del_messages: bool = False,
+) -> None:
 	bot: Bot = context.bot
-	if ischannel := (sender_chat is not None):
-		ban = bot.ban_chat_sender_chat(chatid, sender_chat)
+	if ischannel := isinstance(bannable, BannableChat):
+		ban = bot.ban_chat_sender_chat(chatid, bannable.id)
 	else:
-		ban = bot.ban_chat_member(chatid, userid)
+		ban = bot.ban_chat_member(chatid, bannable.id, revoke_messages=del_messages)
 
 	try:
 		await ban
 	except TelegramError as e:
 		print(
-			f"couldn't ban {'channel' if ischannel else 'user'} {sender_chat if ischannel else userid} ({e.message})",
+			f"couldn't ban {'channel' if ischannel else 'user'} {bannable} ({e.message})",
 			file=stderr
 		)
 
