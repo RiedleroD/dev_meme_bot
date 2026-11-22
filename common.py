@@ -1,13 +1,12 @@
 #!/usr/bin/env python3
 from sys import stderr
 from typing import Literal, overload, Optional, Sequence, Self
-from collections.abc import Callable
 from hashlib import md5
 from urllib.parse import urlparse, urlunparse
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 
-from telegram import Chat, ChatFullInfo, Update, User, Message, Bot, MessageEntity
+from telegram import Chat, ChatFullInfo, User, Message, Bot, MessageEntity
 from telegram.constants import ParseMode
 from telegram.helpers import escape_markdown
 from telegram.ext import CallbackContext
@@ -167,28 +166,6 @@ def get_mention(user: User | BannableWithObj) -> str:
 
 def hashdigest(text: str) -> bytes:
 	return md5(text.encode('utf-8')).digest()
-
-def filter_chat(chat_id: int, chat: str) -> Callable[[Callable], Callable]:
-	'''
-	chat_id: id of a chat
-	chat: chat handle
-	'''
-	def decorator(function: Callable) -> Callable:
-		async def wrapper(update: Update, context: CallbackContext) -> None:
-			if update.message is None:
-				return
-			if update.message.chat_id != chat_id:
-				await update.message.chat.send_message(
-					f'''This feature only works in chat @{escape_md(chat)}
-
-If you want to use this bot outside that group, please contact the developer: \
-[@RiedleroD](tg://user?id=388037461)''',
-					parse_mode=ParseMode.MARKDOWN_V2
-				)
-			else:
-				await function(update, context)
-		return wrapper
-	return decorator
 
 async def is_admin(chat: Chat, user: Bannable | User) -> bool:
 	# might wanna cache admins

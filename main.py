@@ -5,14 +5,15 @@ from collections.abc import Callable
 
 from telegram import Update, Bot, User, Chat, Message, MessageOriginUser, MessageOriginChat, MessageOriginChannel
 from telegram.constants import ParseMode
-from telegram.ext import Application, CallbackContext, CommandHandler, MessageHandler, filters
+from telegram.ext import Application, CallbackContext, filters
 from telegram.error import TelegramError
 
 import database
 from config import CONFIG
 from errors import add_error_handler
 from sus import get_sussy_data, sussy_rater
-from common import escape_md, get_urls_from_message, hashdigest, get_mention, filter_chat, is_admin, get_reply_target, \
+from decorators import filter_chat, on_command as __on_command, on_message as __on_message
+from common import escape_md, get_urls_from_message, hashdigest, get_mention, is_admin, get_reply_target, \
 	check_admin_to_user_action, kick_message, ban_user, Leaderboard, \
 	Bannable, BannableUser, BannableChat, BannableChatWithObj, BannableUserWithObj, BannableUserWithBoth, BannableWithObj
 import common
@@ -25,6 +26,7 @@ db = database.UserDB(CONFIG['database_path'])
 
 print("initializing commands")
 application = Application.builder().token(CONFIG["token"]).build()
+
 if application.job_queue is None:
 	raise Exception("missing requirement: python-telegram-bot[job-queue]")
 
@@ -61,18 +63,11 @@ async def cleanup(context: CallbackContext) -> None:
 if CONFIG['autodelete_every_seconds'] is not None:
 	application.job_queue.run_repeating(cleanup, interval=CONFIG['autodelete_every_seconds'], first=0)
 
-
 def on_command(name: str) -> Callable[[Callable], Callable]:
-	def add_it(func: Callable) -> Callable:
-		application.add_handler(CommandHandler(name, func))
-		return func
-	return add_it
-
+	return __on_command(application, name)
 def on_message(filters: filters.BaseFilter) -> Callable[[Callable], Callable]:
-	def add_it(func: Callable) -> Callable:
-		application.add_handler(MessageHandler(filters, func))
-		return func
-	return add_it
+	return __on_message(application, filters)
+
 
 @on_command("ping")
 async def ping(update: Update, _context: CallbackContext) -> None:
