@@ -113,7 +113,6 @@ async def new_chat_member(update: Update, context: CallbackContext) -> None:
 	await on_text_message(update, context)
 	assert update.message is not None
 	newmembers = []
-	awaitables = []
 	for member in update.message.new_chat_members:
 		sussydata = await get_sussy_data(member)
 		score = sussy_rater(sussydata)[0]
@@ -121,7 +120,7 @@ async def new_chat_member(update: Update, context: CallbackContext) -> None:
 			await ban_user(context, private_chat_id, BannableUserWithObj.from_user(member), True)
 		else:
 			if score > 0:
-				awaitables.append(update.message.reply_text("sus"))
+				await update.message.reply_text("sus")
 			newmembers.append(member)
 	if len(newmembers) > 0:
 		handles = ", ".join(get_mention(member) for member in newmembers)
@@ -135,8 +134,8 @@ Welcome to this chat\\! Please read the rules\\.
 [rules](https://t\\.me/dev\\_meme/3667)""",
 			parse_mode=ParseMode.MARKDOWN_V2
 		)
-	for awaitable in awaitables:
-		await awaitable
+	else:
+		await update.message.delete()
 
 @on_command("spamkick")
 @on_command("kickspam")
