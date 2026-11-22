@@ -11,9 +11,10 @@ from telegram.error import TelegramError
 import database
 from config import CONFIG
 from errors import add_error_handler
+from sus import get_sussy_data, sussy_rater
 from common import escape_md, get_urls_from_message, hashdigest, get_mention, filter_chat, is_admin, get_reply_target, \
 	check_admin_to_user_action, kick_message, ban_user, Leaderboard, \
-	BannableChat, BannableChatWithObj, BannableUserWithObj, BannableUserWithBoth, BannableWithObj
+	Bannable, BannableUser, BannableChat, BannableChatWithObj, BannableUserWithObj, BannableUserWithBoth, BannableWithObj
 import common
 
 private_chat_id: int = CONFIG['private_chat_id']
@@ -79,6 +80,36 @@ async def ping(update: Update, _context: CallbackContext) -> None:
 	dt = datetime.now(update.message.date.tzinfo) - update.message.date
 	await update.message.reply_text(f'Ping is {dt.total_seconds():.2f}s')
 
+@on_command("sus")
+async def susness(update: Update, ctx: CallbackContext) -> None:
+	assert update.message is not None
+	assert update.message.from_user is not None
+	tmsg = update.message
+
+	if not (db.get_trusted(update.message.from_user.id) or await is_admin(update.message.chat, update.message.from_user)):
+		await tmsg.reply_text('only trusted users can check susness ✋🤨 who are you?')
+		return
+
+	target = await get_reply_target(update.message, sendback=None, allow_ment=True)
+	tbannable: Bannable
+	if target is None:
+		tbannable = BannableUserWithObj.from_user(update.message.from_user)
+	else:
+		tbannable = target[0]
+
+	if isinstance(tbannable, BannableUser):
+		tuser = await tbannable.get_obj(ctx.bot)
+		sussy = await get_sussy_data(tuser)
+		score, reasons = sussy_rater(sussy)
+		susmsg = "sus" if score > 10 else ("not sus" if score < 0 else "somewhat sus")
+		scoremsg = f"{score:+1.0f}"
+		reasonmsg = "\n".join(f"{partscore:+1.0f}: {reason}" for reason, partscore in reasons)
+		await tmsg.reply_markdown_v2(f"""\
+User {tuser.mention_markdown_v2()} is {escape_md(susmsg)} \\({escape_md(scoremsg)} susness\\)
+{escape_md(reasonmsg)}""")
+	else:
+		await tmsg.reply_text("not a real user, can't measure susness")
+
 
 @on_message(filters.StatusUpdate.NEW_CHAT_MEMBERS)
 @filter_chat(private_chat_id, private_chat_username)
@@ -86,7 +117,7 @@ async def new_chat_member(update: Update, context: CallbackContext) -> None:
 	await on_any_message(update, context)
 	await on_text_message(update, context)
 	assert update.message is not None
-	# TODO: check for pfps
+	# TODO: determine susness
 	handles = ", ".join(get_mention(member) for member in update.message.new_chat_members)
 	await update.message.reply_text(
 		f"""{handles},

@@ -64,8 +64,7 @@ class BannableChatWithObj(BannableChat, BannableWithHandle):
 
 	@classmethod
 	def from_chat(cls, obj: Chat | ChatFullInfo) -> Self:
-		assert obj.username is not None  # guaranteed
-		return cls(id=obj.id, handle=obj.username.lower(), _obj=obj)
+		return cls(id=obj.id, handle=(obj.username or str(obj.id)).lower(), _obj=obj)
 
 	@property
 	def full_name(self) -> str:

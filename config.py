@@ -11,6 +11,7 @@ class Config(TypedDict):
 	database_path: str
 	message_memory: int
 	spam_threshhold: int
+	sus_threshhold: float
 	spam_minlength: int
 	autodelete_every_seconds: None | int
 	votes_required: int
@@ -24,6 +25,7 @@ defaultconfig: Config = {
 	'message_memory': 100,
 	'spam_threshhold': 2,
 	'spam_minlength': 20,
+	'sus_threshhold': 5,
 	'autodelete_every_seconds': None,
 	'votes_required': 3,
 }
