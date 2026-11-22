@@ -117,18 +117,31 @@ async def new_chat_member(update: Update, context: CallbackContext) -> None:
 	await on_any_message(update, context)
 	await on_text_message(update, context)
 	assert update.message is not None
-	# TODO: determine susness
-	handles = ", ".join(get_mention(member) for member in update.message.new_chat_members)
-	await update.message.reply_text(
-		f"""{handles},
+	newmembers = []
+	awaitables = []
+	for member in update.message.new_chat_members:
+		sussydata = await get_sussy_data(member)
+		score = sussy_rater(sussydata)[0]
+		if score > CONFIG['sus_threshhold']:
+			await ban_user(context, private_chat_id, BannableUserWithObj.from_user(member), True)
+		else:
+			if score > 0:
+				awaitables.append(update.message.reply_text("sus"))
+			newmembers.append(member)
+	if len(newmembers) > 0:
+		handles = ", ".join(get_mention(member) for member in newmembers)
+		await update.message.reply_text(
+			f"""{handles},
 いらっしゃいませ\\! \\[Welcome\\!\\]
 Welcome to this chat\\! Please read the rules\\.
 Добро пожаловать в чат\\! Прочти правила, пожалуйста\\.
 このチャットへようこそ！ ルールをお読みください。
 
 [rules](https://t\\.me/dev\\_meme/3667)""",
-		parse_mode=ParseMode.MARKDOWN_V2
-	)
+			parse_mode=ParseMode.MARKDOWN_V2
+		)
+	for awaitable in awaitables:
+		await awaitable
 
 @on_command("spamkick")
 @on_command("kickspam")
