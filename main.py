@@ -10,6 +10,7 @@ from telegram.error import TelegramError
 
 import database
 from config import CONFIG
+from errors import add_error_handler
 from common import escape_md, get_urls_from_message, hashdigest, get_mention, filter_chat, is_admin, get_reply_target, \
 	check_admin_to_user_action, kick_message, ban_user, Leaderboard, \
 	BannableChat, BannableChatWithObj, BannableUserWithObj, BannableUserWithBoth, BannableWithObj
@@ -358,6 +359,11 @@ async def leaderboard(update: Update, context: CallbackContext) -> None:
 		parse_mode=ParseMode.MARKDOWN_V2
 	)
 
+@on_command("crash")
+@filter_chat(private_chat_id, private_chat_username)
+async def crash(update: Update, context: CallbackContext) -> None:
+	raise Exception('this is an exception for testing the error handler')
+
 @on_command("myrank")
 async def myrank(update: Update, context: CallbackContext) -> None:
 	assert update.message is not None
@@ -475,5 +481,6 @@ async def on_any_message(update: Update, context: CallbackContext) -> None:
 		common.trunc_msgmem(common.recent_message_users)
 
 print("starting polling")
+add_error_handler(application, private_chat_id)
 application.run_polling()
 print("exiting")
