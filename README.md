@@ -28,6 +28,7 @@ replace relevant paths and the user in `riedlersdevbot.rcservice` and drop the f
 ### for trusted users:
 
 - `/votekick` - vote to kick a user (bot will ban after 3 votes) ((votes timeout after 24h))
+- `/sus` - check susness level of a user
 
 ### for admins:
 
@@ -40,5 +41,6 @@ replace relevant paths and the user in `riedlersdevbot.rcservice` and drop the f
 ## other features
 
 The bot will greet new users with a welcome message when they join (TODO: make configurable)
+If a user exceeds a certain susness threshhold, they get banned instead.
 
 It remembers what hyperlinks are associated with votekicks and looks through the last 100 messages, as well as all future ones, when it decides that a link is spam.

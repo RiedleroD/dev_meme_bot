@@ -25,7 +25,7 @@ defaultconfig: Config = {
 	'message_memory': 100,
 	'spam_threshhold': 2,
 	'spam_minlength': 20,
-	'sus_threshhold': 5,
+	'sus_threshhold': 8,
 	'autodelete_every_seconds': None,
 	'votes_required': 3,
 }

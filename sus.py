@@ -57,19 +57,22 @@ def sussy_rater(sb: SussyData) -> tuple[int, sussytuplist]:
 			sussy.append(("Firstname Lastname", 5))
 		# special characters in fnln
 		sussy.append(("alpha fnln", -5 if not all(name.isalpha() and name.isascii() for name in allnames) else 2))
+	if (sb.firstname is None) != (sb.lastname is None):
+		sussy.append(("mononym", -3))
 	if sb.username is not None:
 		sussy.append(("alpha usrname", -2 if not sb.username.isalpha() and sb.username.isascii() else 2))
 	elif sb.username is None:
 		sussy.append(("no username", 5))
-	sussy.append(("premium", -2 if sb.premium else 2))
+	sussy.append(("premium", -1 if sb.premium else 1))
 
 	# NOTE: minimum possible should be:
 	# - 1 has pfp
 	# -10 low accNr
 	# - 5 non-alpha fnln
 	# - 2 non-alpha username
-	# - 2 premium
-	# -20 TOTAL
+	# - 3 mononym
+	# - 1 premium
+	# -22 TOTAL
 	# NOTE: maximum possible should be:
 	# - 1 has pfp
 	# + 5 high accNr
@@ -77,7 +80,7 @@ def sussy_rater(sb: SussyData) -> tuple[int, sussytuplist]:
 	# + 5 Firstname Lastname
 	# + 2 fully alpha fnln
 	# + 2 fully alpha username
-	# + 2 premium
+	# + 1 premium
 	# +17
 
 	# NOTE: mine would be:
@@ -87,7 +90,7 @@ def sussy_rater(sb: SussyData) -> tuple[int, sussytuplist]:
 	# + 5 Firstname Lastname
 	# + 2 alphanum fnln
 	# + 2 alphanum username
-	# + 2 premium
-	# -5 TOTAL
+	# + 1 premium
+	# -6 TOTAL
 
 	return sum(score for reason, score in sussy), sussy
